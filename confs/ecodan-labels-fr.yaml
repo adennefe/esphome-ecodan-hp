@@ -153,6 +153,7 @@ substitutions:
   heating_system_type_option_ufh_rad: 'Chauffage au Sol + Radiateurs'
   heating_system_type_option_rad: 'Radiateurs'
   auto_adaptive_setpoint_bias: 'Auto-Adaptatif: Bias de Consigne'
+  z2_guard_delta_t_tolerance: 'Auto-Adaptatif: Tolérance Delta-T de protection Z2'
   temperature_feedback: 'Auto-Adaptatif: Retour de Température Ambiante Actuelle'
   defrost_risk_handling_enabled: 'Auto-Adaptatif: Atténuation Dégivrage'
   smart_boost_enabled: 'Auto-Adaptatif : Boost Intelligent'

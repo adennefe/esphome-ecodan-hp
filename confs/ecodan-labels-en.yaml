@@ -155,6 +155,7 @@ substitutions:
   heating_system_type_option_ufh_rad: 'Underfloor Heating + Radiators'
   heating_system_type_option_rad: 'Radiators'
   auto_adaptive_setpoint_bias: 'Auto-Adaptive: Setpoint Bias'
+  z2_guard_delta_t_tolerance: 'Auto-Adaptive: Z2 Guard Delta-T Tolerance'
   temperature_feedback: 'Auto-Adaptive: Current Room Temperature Feedback'
   defrost_risk_handling_enabled: 'Auto-Adaptive: Defrost Mitigation'
   smart_boost_enabled: 'Auto-Adaptive: Smart Boost'

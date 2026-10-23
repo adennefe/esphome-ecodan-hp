@@ -1,4 +1,5 @@
 #include "optimizer.h"
+#include <cmath>
 
 using std::isnan;
 
@@ -328,11 +329,31 @@ namespace esphome
             }
             else
             {
-                if (guard_enabled && (feed - ret) > target_delta_t && calculated < feed)
+                float guard_tolerance = 0.0f;
+                if (zone == OptimizerZone::ZONE_2 &&
+                    this->state_.z2_guard_delta_t_tolerance != nullptr)
                 {
-                    ESP_LOGI(OPTIMIZER_TAG,
-                        "[Buffer] Z%d Short-cycle guard (Heating): ΔT actual %.2f > target %.2f — held %.2f → %.2f",
-                        (int)zone, feed - ret, target_delta_t, calculated, feed);
+                    const float configured_tolerance = this->state_.z2_guard_delta_t_tolerance->state;
+                    if (std::isfinite(configured_tolerance))
+                        guard_tolerance = std::max(0.0f, std::min(5.0f, configured_tolerance));
+                }
+                const float effective_guard_threshold = target_delta_t + guard_tolerance;
+
+                if (guard_enabled && (feed - ret) > effective_guard_threshold && calculated < feed)
+                {
+                    if (zone == OptimizerZone::ZONE_2)
+                    {
+                        ESP_LOGI(OPTIMIZER_TAG,
+                            "[Buffer] Z%d Short-cycle guard (Heating): actual delta-T %.2f K > target delta-T %.2f K + tolerance %.2f K = threshold %.2f K; pre-guard flow %.2f C, guard result %.2f C",
+                            (int)zone, feed - ret, target_delta_t, guard_tolerance,
+                            effective_guard_threshold, calculated, feed);
+                    }
+                    else
+                    {
+                        ESP_LOGI(OPTIMIZER_TAG,
+                            "[Buffer] Z%d Short-cycle guard (Heating): ΔT actual %.2f > target %.2f — held %.2f → %.2f",
+                            (int)zone, feed - ret, target_delta_t, calculated, feed);
+                    }
                     calculated = feed;
                 }
 

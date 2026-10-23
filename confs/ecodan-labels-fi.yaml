@@ -153,6 +153,7 @@ substitutions:
   heating_system_type_option_ufh_rad: 'Lattialämmitys + patterit'
   heating_system_type_option_rad: 'Patterit'
   auto_adaptive_setpoint_bias: 'Mukautuva ohjaus: Asetusarvon poikkeama'
+  z2_guard_delta_t_tolerance: 'Mukautuva ohjaus: Z2-suojauksen delta-T-toleranssi'
   temperature_feedback: 'Mukautuva ohjaus: Huonelämpötilan palaute'
   defrost_risk_handling_enabled: 'Mukautuva ohjaus: Sulatuksen vähentäminen'
   smart_boost_enabled: 'Mukautuva ohjaus: Älykäs tehostus'

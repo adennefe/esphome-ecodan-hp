@@ -153,6 +153,7 @@ substitutions:
   heating_system_type_option_ufh_rad: 'Vloerverwarming + Radiatoren'
   heating_system_type_option_rad: 'Radiatoren'
   auto_adaptive_setpoint_bias: 'Auto-Adaptief: Setpoint Bias'
+  z2_guard_delta_t_tolerance: 'Auto-Adaptief: Z2-beveiliging Delta-T-tolerantie'
   temperature_feedback: 'Auto-Adaptief: Terugkoppeling Huidige Kamertemperatuur'
   defrost_risk_handling_enabled: 'Auto-Adaptief: Defrosts Beperken'
   smart_boost_enabled: 'Auto-Adaptief: Slimme Boost'

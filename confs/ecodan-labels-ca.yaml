@@ -155,6 +155,7 @@ substitutions:
   heating_system_type_option_ufh_rad: Terra radiant + radiadors
   heating_system_type_option_rad: Radiadors
   auto_adaptive_setpoint_bias: "Autoadaptatiu: biaix de consigna"
+  z2_guard_delta_t_tolerance: "Auto-Adaptive: Tolerància delta-T de protecció Z2"
   temperature_feedback: "Autoadaptatiu: retroacció de la temperatura ambient actual"
   defrost_risk_handling_enabled: "Autoadaptatiu: mitigació del desglaç"
   smart_boost_enabled: "Autoadaptatiu: impuls intel·ligent"

@@ -152,6 +152,7 @@ substitutions:
   heating_system_type_option_ufh_rad: 'Fußbodenheizung + Heizkörper'
   heating_system_type_option_rad: 'Heizkörper'
   auto_adaptive_setpoint_bias: 'Auto-Adaptiv: Sollwert-Bias'
+  z2_guard_delta_t_tolerance: 'Auto-Adaptiv: Z2-Guard-Delta-T-Toleranz'
   temperature_feedback: 'Auto-Adaptiv: Rückmeldung Aktuelle Raumtemperatur'
   defrost_risk_handling_enabled: 'Auto-Adaptiv: Abtau-Reduzierung'
   smart_boost_enabled: 'Auto-Adaptiv: Intelligenter Boost'

@@ -223,3 +223,9 @@ Now you are ready to let the algorithm take control.
 1.  **Set Heat Pump to Fixed Flow Mode**
 2.  **Enable Auto-Adaptive Control**: In Home Assistant, turn **ON** the `Auto-Adaptive: Control` switch.
 
+### Zone 2 Heating Guard Delta-T Tolerance
+
+The **Auto-Adaptive: Z2 Guard Delta-T Tolerance** number adjusts only the Zone 2 heating short-cycle guard threshold. It is restored after reboot and defaults to **0.0 K**, which preserves the existing threshold. It can be set from **0.0 K to 5.0 K** in **0.1 K** steps.
+
+The guard threshold is the calculated target delta-T plus this tolerance. For example, with a target delta-T of **4.2 K** and a tolerance of **1.0 K**, the guard's delta-T condition is met only when actual delta-T is greater than **5.2 K**. The guard's other conditions and hold-at-current-feed action still apply. This setting does not change the ordinary target delta-T, calculated flow temperature, Zone 1 heating guard, or cooling behavior.
+
