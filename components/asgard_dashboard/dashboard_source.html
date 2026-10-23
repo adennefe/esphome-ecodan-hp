@@ -739,6 +739,7 @@ header {
         </div>
 
         <div class="ctrl-row" style="border-bottom: none; padding-bottom: 0;"><span class="ctrl-label param-label">Setpoint Bias<span class="tip-icon">?</span><span class="tip-box">A flat offset added to whatever flow temperature Auto-Adaptive calculates. Positive if the room consistently runs cold, negative if it consistently overshoots.</span></span><div class="stepper"><button class="step-btn" onclick="step('aa-bias', -0.1)">−</button><input type="number" class="step-input" id="aa-bias-val" onchange="manualInput('aa-bias', this.value)"><button class="step-btn" onclick="step('aa-bias', +0.1)">+</button></div></div>
+        <div class="ctrl-row"><span class="ctrl-label param-label">Guard Delta-T Tolerance Z1<span class="tip-icon">?</span><span class="tip-box">Adds 0.0–5.0 K to the Zone 1 heating guard's delta-T threshold. Set to 0.0 K to disable the added tolerance.</span></span><div class="stepper"><button class="step-btn" onclick="step('aa-guard-dt-z1', -0.1)">−</button><input type="number" class="step-input" id="aa-guard-dt-z1-val" onchange="manualInput('aa-guard-dt-z1', this.value)"><button class="step-btn" onclick="step('aa-guard-dt-z1', +0.1)">+</button></div></div>
         <div class="ctrl-row"><span class="ctrl-label param-label">Global Smart Start Temp<span class="tip-icon">?</span><span class="tip-box">Ceiling on the flow temperature for the first command when a cooling cycle starts, so the system doesn't demand a fully-cold flow while the emitter water is still warm from sitting idle. Only applies before the compressor is actively cooling — once it's running, this cap is lifted and the algorithm targets the true calculated flow. Shared across both zones.</span></span><div class="stepper"><button class="step-btn" onclick="step('cool-start-z1', -0.5)">−</button><input type="number" class="step-input" id="cool-start-z1-val" onchange="manualInput('cool-start-z1', this.value)"><button class="step-btn" onclick="step('cool-start-z1', +0.5)">+</button></div></div>
         <div class="sub-label" style="margin-top: 24px; padding-top: 16px; border-top: 1px dashed var(--border); padding-bottom: 5px;">Settings Z1</div>
 
@@ -787,6 +788,7 @@ header {
         
         <div id="aa-z2-container" style="display:none;">
           <div class="sub-label" style="margin-top: 24px; padding-top: 16px; border-top: 1px dashed var(--border); padding-bottom: 5px;">Settings Z2</div>
+          <div class="ctrl-row"><span class="ctrl-label param-label">Guard Delta-T Tolerance Z2<span class="tip-icon">?</span><span class="tip-box">Adds 0.0–5.0 K to the Zone 2 heating guard's delta-T threshold. Set to 0.0 K to disable the added tolerance.</span></span><div class="stepper"><button class="step-btn" onclick="step('aa-guard-dt-z2', -0.1)">−</button><input type="number" class="step-input" id="aa-guard-dt-z2-val" onchange="manualInput('aa-guard-dt-z2', this.value)"><button class="step-btn" onclick="step('aa-guard-dt-z2', +0.1)">+</button></div></div>
           <div class="ctrl-row" id="row-z2src">
             <span class="ctrl-label param-label">Room Temp Source Z2<span class="tip-icon">?</span>
               <span class="tip-box">
@@ -1201,6 +1203,8 @@ const history = {
 const CONTROLS = [
   // ── Auto Adaptive ──
   { type:'number', pkey:'aa-bias',     key:'auto_adaptive_setpoint_bias',  el:'aa-bias-val',     min:-5,    max:5,    step:0.1 },
+  { type:'number', pkey:'aa-guard-dt-z1', key:'z1_guard_delta_t_tolerance', el:'aa-guard-dt-z1-val', min:0, max:5, step:0.1 },
+  { type:'number', pkey:'aa-guard-dt-z2', key:'z2_guard_delta_t_tolerance', el:'aa-guard-dt-z2-val', min:0, max:5, step:0.1 },
   { type:'number', pkey:'aa-max',      key:'maximum_heating_flow_temp',    el:'aa-max-val',      min:30,    max:65,   step:0.1 },
   { type:'number', pkey:'aa-min',      key:'minimum_heating_flow_temp',    el:'aa-min-val',      min:20,    max:55,   step:0.1 },
   { type:'number', pkey:'aa-max-z2',   key:'maximum_heating_flow_temp_z2', el:'aa-max-z2-val',   min:30,    max:65,   step:0.1 },
@@ -2235,6 +2239,8 @@ function render(d) {
   }
 
   if (d.aa_bias_lim) LIMITS['aa-bias'] = d.aa_bias_lim;
+  if (d.guard_delta_t_z1_lim) LIMITS['aa-guard-dt-z1'] = d.guard_delta_t_z1_lim;
+  if (d.guard_delta_t_z2_lim) LIMITS['aa-guard-dt-z2'] = d.guard_delta_t_z2_lim;
   if (d.max_flow_lim) { LIMITS['aa-max'].min = d.max_flow_lim.min; LIMITS['aa-max'].max = d.max_flow_lim.max; LIMITS['aa-max'].step = 0.1; }
   if (d.min_flow_lim) { LIMITS['aa-min'].min = d.min_flow_lim.min; LIMITS['aa-min'].max = d.min_flow_lim.max; LIMITS['aa-min'].step = 0.1; }
   if (d.max_flow_z2_lim) { LIMITS['aa-max-z2'].min = d.max_flow_z2_lim.min; LIMITS['aa-max-z2'].max = d.max_flow_z2_lim.max; LIMITS['aa-max-z2'].step = 0.1; }
@@ -2357,6 +2363,8 @@ function render(d) {
   seedPending('flow-z2-sp', d.flow_z2_setpoint);
 
   seedPending('aa-bias', d.auto_adaptive_setpoint_bias);
+  seedPending('aa-guard-dt-z1', d.z1_guard_delta_t_tolerance);
+  seedPending('aa-guard-dt-z2', d.z2_guard_delta_t_tolerance);
   seedPending('aa-max',  d.maximum_heating_flow_temp);
   seedPending('aa-min',  d.minimum_heating_flow_temp);
   seedPending('aa-max-z2', d.maximum_heating_flow_temp_z2);
@@ -2537,6 +2545,8 @@ async function sendAA(btn) {
   let c = 0;
   try {
     if (hasChanged('aa-bias'))   { await apiPost({ key: 'auto_adaptive_setpoint_bias', value: pending['aa-bias'] }); c++; }
+    if (hasChanged('aa-guard-dt-z1')) { await apiPost({ key: 'z1_guard_delta_t_tolerance', value: pending['aa-guard-dt-z1'] }); c++; }
+    if (hasChanged('aa-guard-dt-z2')) { await apiPost({ key: 'z2_guard_delta_t_tolerance', value: pending['aa-guard-dt-z2'] }); c++; }
     if (hasChanged('aa-max'))    { await apiPost({ key: 'maximum_heating_flow_temp', value: pending['aa-max'] }); c++; }
     if (hasChanged('aa-min'))    { await apiPost({ key: 'minimum_heating_flow_temp', value: pending['aa-min'] }); c++; }
     if (hasChanged('aa-max-z2')) { await apiPost({ key: 'maximum_heating_flow_temp_z2', value: pending['aa-max-z2'] }); c++; }

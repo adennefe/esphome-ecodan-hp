@@ -82,6 +82,7 @@ namespace esphome
 
 
         esphome::number::Number *auto_adaptive_setpoint_bias;
+        esphome::number::Number *z1_guard_delta_t_tolerance{nullptr};
         esphome::number::Number *z2_guard_delta_t_tolerance{nullptr};
         esphome::number::Number *temperature_feedback_z1;
         esphome::number::Number *temperature_feedback_z2;

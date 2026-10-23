@@ -98,6 +98,8 @@ struct DashboardSnapshot {
   // Number sensors with limits
   struct NumData { float val{NAN}; float min{NAN}; float max{NAN}; float step{NAN}; };
   NumData num_aa_setpoint_bias;
+  NumData num_guard_delta_t_tolerance_z1;
+  NumData num_guard_delta_t_tolerance_z2;
   NumData num_max_flow_temp;
   NumData num_min_flow_temp;
   NumData num_max_flow_temp_z2;
@@ -256,6 +258,8 @@ class EcodanDashboard : public Component, public AsyncWebHandler {
 
   // Numbers
   void set_num_aa_setpoint_bias(number::Number *n)            { num_aa_setpoint_bias_ = n; }
+  void set_num_guard_delta_t_tolerance_z1(number::Number *n)  { num_guard_delta_t_tolerance_z1_ = n; }
+  void set_num_guard_delta_t_tolerance_z2(number::Number *n)  { num_guard_delta_t_tolerance_z2_ = n; }
   void set_num_max_flow_temp(number::Number *n)               { num_max_flow_temp_ = n; }
   void set_num_min_flow_temp(number::Number *n)               { num_min_flow_temp_ = n; }
   void set_num_max_flow_temp_z2(number::Number *n)            { num_max_flow_temp_z2_ = n; }
@@ -428,6 +432,8 @@ class EcodanDashboard : public Component, public AsyncWebHandler {
 
   // Numbers
   number::Number *num_aa_setpoint_bias_{nullptr};
+  number::Number *num_guard_delta_t_tolerance_z1_{nullptr};
+  number::Number *num_guard_delta_t_tolerance_z2_{nullptr};
   number::Number *num_max_flow_temp_{nullptr};
   number::Number *num_min_flow_temp_{nullptr};
   number::Number *num_max_flow_temp_z2_{nullptr};

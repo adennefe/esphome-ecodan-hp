@@ -153,6 +153,7 @@ substitutions:
   heating_system_type_option_ufh_rad: 'Riscaldamento a Pavimento + Radiatori'
   heating_system_type_option_rad: 'Radiatori'
   auto_adaptive_setpoint_bias: 'Autoadattivo: Bias del Setpoint'
+  z1_guard_delta_t_tolerance: 'Autoadattivo: Tolleranza Delta-T protezione Z1'
   z2_guard_delta_t_tolerance: 'Autoadattivo: Tolleranza Delta-T protezione Z2'
   temperature_feedback: 'Autoadattivo: Feedback Temperatura Ambiente Attuale'
   defrost_risk_handling_enabled: 'Autoadattivo: Mitigazione Sbrinamento'

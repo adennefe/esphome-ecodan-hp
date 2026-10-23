@@ -155,6 +155,7 @@ substitutions:
   heating_system_type_option_ufh_rad: 'Talno ogrevanje + radiatorji'
   heating_system_type_option_rad: 'Radiatorji'
   auto_adaptive_setpoint_bias: 'Samoprilagajanje: Odmik nastavljene vrednosti'
+  z1_guard_delta_t_tolerance: 'Samoprilagajanje: Toleranca delta-T zaščite Z1'
   z2_guard_delta_t_tolerance: 'Samoprilagajanje: Toleranca delta-T zaščite Z2'
   temperature_feedback: 'Samoprilagajanje: Trenutna povratna sobna temperatura'
   defrost_risk_handling_enabled: 'Samoprilagajanje: Blaženje odtajevanja'

@@ -389,6 +389,8 @@ void EcodanDashboard::dispatch_set_(const std::string &key, const std::string &s
     call.perform();
   };
   if (key == "auto_adaptive_setpoint_bias") { doNumber(num_aa_setpoint_bias_); return; }
+  if (key == "z1_guard_delta_t_tolerance") { doNumber(num_guard_delta_t_tolerance_z1_); return; }
+  if (key == "z2_guard_delta_t_tolerance") { doNumber(num_guard_delta_t_tolerance_z2_); return; }
   if (key == "maximum_heating_flow_temp")   { doNumber(num_max_flow_temp_);    return; }
   if (key == "minimum_heating_flow_temp")   { doNumber(num_min_flow_temp_);    return; }
   if (key == "maximum_heating_flow_temp_z2") { doNumber(num_max_flow_temp_z2_); return; }
@@ -570,6 +572,8 @@ void EcodanDashboard::update_snapshot_() {
 
   // Populate Numbers
   get_n(num_aa_setpoint_bias_, current_snapshot_.num_aa_setpoint_bias);
+  get_n(num_guard_delta_t_tolerance_z1_, current_snapshot_.num_guard_delta_t_tolerance_z1);
+  get_n(num_guard_delta_t_tolerance_z2_, current_snapshot_.num_guard_delta_t_tolerance_z2);
   get_n(num_max_flow_temp_, current_snapshot_.num_max_flow_temp);
   get_n(num_min_flow_temp_, current_snapshot_.num_min_flow_temp);
   get_n(num_max_flow_temp_z2_, current_snapshot_.num_max_flow_temp_z2);
@@ -817,6 +821,10 @@ void EcodanDashboard::handle_state_(AsyncWebServerRequest *request) {
 
   p_n("auto_adaptive_setpoint_bias",   snap.num_aa_setpoint_bias.val);
   p_lim("aa_bias_lim",                 snap.num_aa_setpoint_bias);
+  p_n("z1_guard_delta_t_tolerance",    snap.num_guard_delta_t_tolerance_z1.val);
+  p_lim("guard_delta_t_z1_lim",        snap.num_guard_delta_t_tolerance_z1);
+  p_n("z2_guard_delta_t_tolerance",    snap.num_guard_delta_t_tolerance_z2.val);
+  p_lim("guard_delta_t_z2_lim",        snap.num_guard_delta_t_tolerance_z2);
   p_n("maximum_heating_flow_temp",     snap.num_max_flow_temp.val);
   p_lim("max_flow_lim",                snap.num_max_flow_temp);
   p_n("minimum_heating_flow_temp",     snap.num_min_flow_temp.val);

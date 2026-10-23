@@ -101,6 +101,8 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional("sel_temp_source_z2_id"):              cv.use_id(select.Select),
 
         cv.Optional("num_aa_setpoint_bias_id"):            cv.use_id(number.Number),
+        cv.Optional("num_guard_delta_t_tolerance_z1_id"): cv.use_id(number.Number),
+        cv.Optional("num_guard_delta_t_tolerance_z2_id"): cv.use_id(number.Number),
         cv.Optional("num_max_flow_temp_id"):               cv.use_id(number.Number),
         cv.Optional("num_min_flow_temp_id"):               cv.use_id(number.Number),
         cv.Optional("num_max_flow_temp_z2_id"):            cv.use_id(number.Number),
@@ -241,6 +243,8 @@ async def to_code(config):
         ("sel_temp_source_z1_id",             "set_sel_temp_source_z1"),
         ("sel_temp_source_z2_id",             "set_sel_temp_source_z2"),
         ("num_aa_setpoint_bias_id",           "set_num_aa_setpoint_bias"),
+        ("num_guard_delta_t_tolerance_z1_id",  "set_num_guard_delta_t_tolerance_z1"),
+        ("num_guard_delta_t_tolerance_z2_id",  "set_num_guard_delta_t_tolerance_z2"),
         ("num_max_flow_temp_id",              "set_num_max_flow_temp"),
         ("num_min_flow_temp_id",              "set_num_min_flow_temp"),
         ("num_max_flow_temp_z2_id",           "set_num_max_flow_temp_z2"),

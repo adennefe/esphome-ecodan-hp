@@ -71,6 +71,7 @@ esphome:
             state.status_defrost = id(status_defrost);
 
             state.auto_adaptive_setpoint_bias = id(auto_adaptive_setpoint_bias);
+            state.z1_guard_delta_t_tolerance = id(z1_guard_delta_t_tolerance);
             state.z2_guard_delta_t_tolerance = id(z2_guard_delta_t_tolerance);
             state.temperature_feedback_z1 = id(temperature_feedback_z1);
             state.temperature_feedback_z2 = id(temperature_feedback_z2);
@@ -180,6 +181,16 @@ number:
     initial_value: 0.0
     min_value: -2.5
     max_value: 2.5
+    step: 0.1
+  - platform: template
+    id: z1_guard_delta_t_tolerance
+    name: ${z1_guard_delta_t_tolerance}
+    unit_of_measurement: "K"
+    optimistic: true
+    restore_value: true
+    initial_value: 0.0
+    min_value: 0.0
+    max_value: 5.0
     step: 0.1
   - platform: template
     id: z2_guard_delta_t_tolerance

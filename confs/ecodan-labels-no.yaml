@@ -152,6 +152,7 @@ substitutions:
   heating_system_type_option_ufh_rad: 'Gulvvarme + Radiatorer'
   heating_system_type_option_rad: 'Radiatorer'
   auto_adaptive_setpoint_bias: 'Autoadaptiv: Settpunkt-bias'
+  z1_guard_delta_t_tolerance: 'Autoadaptiv: Z1-vernets delta-T-toleranse'
   z2_guard_delta_t_tolerance: 'Autoadaptiv: Z2-vernets delta-T-toleranse'
   temperature_feedback: 'Autoadaptiv: Tilbakemelding Nåværende Romtemperatur'
   defrost_risk_handling_enabled: 'Autoadaptiv: Avrimingsreduksjon'

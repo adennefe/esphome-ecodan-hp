@@ -155,6 +155,7 @@ substitutions:
   heating_system_type_option_ufh_rad: 'Podlahové kúrenie + radiátory'
   heating_system_type_option_rad: 'Radiátory'
   auto_adaptive_setpoint_bias: 'Posun cieľovej hodnoty'
+  z1_guard_delta_t_tolerance: 'Tolerancia delta-T ochrany Z1'
   z2_guard_delta_t_tolerance: 'Tolerancia delta-T ochrany Z2'
   temperature_feedback: 'Aktuálna teplota miestnosti'
   defrost_risk_handling_enabled: 'Auto-adaptívne: zmiernenie odmrazovania'

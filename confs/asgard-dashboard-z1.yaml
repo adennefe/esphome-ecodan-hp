@@ -75,6 +75,7 @@ asgard_dashboard:
  
   # ── Numbers 
   num_aa_setpoint_bias_id:           auto_adaptive_setpoint_bias
+  num_guard_delta_t_tolerance_z1_id: z1_guard_delta_t_tolerance
   num_max_flow_temp_id:              maximum_heating_flow_temp
   num_min_flow_temp_id:              minimum_heating_flow_temp
   num_hysteresis_z1_id:              thermostat_hysteresis_z1
