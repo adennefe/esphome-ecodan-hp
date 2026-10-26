@@ -8,6 +8,22 @@ namespace esphome
     {
         using namespace esphome::ecodan;
 
+        void Optimizer::reset_z2_soft_start_(const char *reason)
+        {
+            if (this->z2_soft_start_pending_ || this->z2_soft_start_active_)
+                ESP_LOGI(OPTIMIZER_TAG, "Z2 soft-start cancelled: %s.", reason);
+            this->z2_soft_start_pending_ = false;
+            this->z2_soft_start_active_ = false;
+            this->z2_soft_start_last_step_ = -1;
+            this->z2_soft_start_initial_flow_ = NAN;
+            this->z2_soft_start_floor_ = NAN;
+        }
+
+        void Optimizer::cancel_z2_soft_start()
+        {
+            this->reset_z2_soft_start_("disabled by user");
+        }
+
         void Optimizer::on_feed_temp_change(float actual_flow_temp, OptimizerZone zone) {
             if (std::isnan(actual_flow_temp))
                 return;
@@ -244,6 +260,9 @@ namespace esphome
             auto legionella_mode = static_cast<uint8_t>(esphome::ecodan::Status::OperationMode::LEGIONELLA_PREVENTION);
             auto &status = this->state_.ecodan_instance->get_status();
 
+            if (new_mode != heating_mode && (this->z2_soft_start_pending_ || this->z2_soft_start_active_))
+                this->reset_z2_soft_start_("operation left heating");
+
             bool entering_dhw = (new_mode == dhw_mode || new_mode == legionella_mode)
                              && (previous_mode != dhw_mode && previous_mode != legionella_mode);
 
@@ -330,6 +349,8 @@ namespace esphome
             // New defrost, store outside temp
             if (!x_previous && x)
             {
+                if (this->z2_soft_start_pending_ || this->z2_soft_start_active_)
+                    this->reset_z2_soft_start_("defrost started");
                 auto &status = this->state_.ecodan_instance->get_status();
                 DefrostState state_before_defrost{};
 
@@ -361,6 +382,8 @@ namespace esphome
 
         void Optimizer::on_compressor_state_change(bool x, bool x_previous)
         {
+            if (x_previous && !x)
+                this->reset_z2_soft_start_("compressor stopped");
             if (millis() < 60000) 
                 return;
 
@@ -376,6 +399,19 @@ namespace esphome
                 {
                     ESP_LOGI(OPTIMIZER_CYCLE_TAG, "Compressor START detected");
                     this->compressor_start_time_ = millis();
+                    if (this->state_.z2_soft_start_enabled != nullptr
+                        && this->state_.z2_soft_start_enabled->state
+                        && status.Operation == esphome::ecodan::Status::OperationMode::HEAT_ON
+                        && status.has_2zones()
+                        && status.is_auto_adaptive_heating(esphome::ecodan::Zone::ZONE_2)
+                        && status.is_heating_active(esphome::ecodan::Zone::ZONE_2)) {
+                        this->z2_soft_start_pending_ = true;
+                        this->z2_soft_start_active_ = false;
+                        this->z2_soft_start_start_ms_ = millis();
+                        this->z2_soft_start_initial_flow_ = NAN;
+                        this->z2_soft_start_last_step_ = -1;
+                        ESP_LOGI(OPTIMIZER_TAG, "Z2 soft-start armed after compressor start; waiting for first valid AA flow calculation.");
+                    }
                 }
                 if (this->state_.auto_adaptive_control_enabled->state)
                 {

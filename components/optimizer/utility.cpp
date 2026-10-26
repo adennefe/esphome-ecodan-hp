@@ -274,7 +274,7 @@ namespace esphome
             return calculated_flow;
         }
 
-        float Optimizer::apply_flow_limits(OptimizerZone zone, float calculated, float target_delta_t, float guard_return_temp)
+        float Optimizer::apply_flow_limits(OptimizerZone zone, float calculated, float target_delta_t, float guard_return_temp, float heating_min_override)
         {
             auto &status = this->state_.ecodan_instance->get_status();
             bool cooling = this->is_cooling_mode(status, zone);
@@ -356,6 +356,8 @@ namespace esphome
                 calculated = this->round_nearest(calculated);
 
                 auto limits = this->get_flow_limits(zone);
+                if (zone == OptimizerZone::ZONE_2 && std::isfinite(heating_min_override))
+                    limits.min = std::min(heating_min_override, limits.max);
                 calculated = this->enforce_step_limit(status, feed, calculated, false);
                 // only skip clamp during post dhw window
                 if (!this->is_post_dhw_window(status))

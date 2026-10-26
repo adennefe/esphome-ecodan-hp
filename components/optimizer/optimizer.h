@@ -68,6 +68,12 @@ namespace esphome
       const float MAX_FEED_STEP_ADJUSTMENT = 1.0f;
 
       uint32_t compressor_start_time_ = 0;
+      bool z2_soft_start_pending_{false};
+      bool z2_soft_start_active_{false};
+      uint32_t z2_soft_start_start_ms_{0};
+      int32_t z2_soft_start_last_step_{-1};
+      float z2_soft_start_initial_flow_{NAN};
+      float z2_soft_start_floor_{NAN};
       uint32_t last_defrost_time_     = 0;
       DefrostState state_before_defrost_;
 
@@ -151,6 +157,7 @@ namespace esphome
       void on_compressor_stop();
       void on_compressor_state_change(bool x, bool x_previous);
       void on_defrost_state_change(bool x, bool x_previous);
+      void cancel_z2_soft_start();
 
       // Lockout
       void restore_pre_lockout_state();
@@ -173,7 +180,8 @@ namespace esphome
       FlowLimits get_flow_limits(OptimizerZone zone);
       FlowLimits get_cool_flow_limits(OptimizerZone zone);
 
-      float apply_flow_limits(OptimizerZone zone, float calculated, float target_delta_t, float guard_return_temp);
+      float apply_flow_limits(OptimizerZone zone, float calculated, float target_delta_t, float guard_return_temp, float heating_min_override = NAN);
+      void reset_z2_soft_start_(const char *reason);
       float limit_external_flow(OptimizerZone zone, float requested);
 
       // Solver / ODIN
