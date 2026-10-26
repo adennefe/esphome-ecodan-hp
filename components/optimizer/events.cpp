@@ -24,6 +24,25 @@ namespace esphome
             this->reset_z2_soft_start_("disabled by user");
         }
 
+        void Optimizer::reset_z2_target_delta_soft_start_(const char *reason)
+        {
+            if (this->z2_target_delta_soft_start_pending_ || this->z2_target_delta_soft_start_active_)
+                ESP_LOGI(OPTIMIZER_TAG, "Z2 target-delta soft-start cancelled: %s.", reason);
+            this->z2_target_delta_soft_start_pending_ = false;
+            this->z2_target_delta_soft_start_active_ = false;
+            this->z2_target_delta_soft_start_reached_raw_ = false;
+            this->z2_target_delta_last_step_ = -1;
+            this->z2_target_delta_initial_raw_ = NAN;
+            this->z2_target_delta_max_raw_seen_ = NAN;
+            this->z2_target_delta_start_value_ = NAN;
+            this->z2_target_delta_ramp_value_ = NAN;
+        }
+
+        void Optimizer::cancel_z2_target_delta_soft_start()
+        {
+            this->reset_z2_target_delta_soft_start_("disabled by user");
+        }
+
         void Optimizer::on_feed_temp_change(float actual_flow_temp, OptimizerZone zone) {
             if (std::isnan(actual_flow_temp))
                 return;
@@ -262,6 +281,8 @@ namespace esphome
 
             if (new_mode != heating_mode && (this->z2_soft_start_pending_ || this->z2_soft_start_active_))
                 this->reset_z2_soft_start_("operation left heating");
+            if (new_mode != heating_mode && (this->z2_target_delta_soft_start_pending_ || this->z2_target_delta_soft_start_active_))
+                this->reset_z2_target_delta_soft_start_("operation left heating");
 
             bool entering_dhw = (new_mode == dhw_mode || new_mode == legionella_mode)
                              && (previous_mode != dhw_mode && previous_mode != legionella_mode);
@@ -351,6 +372,8 @@ namespace esphome
             {
                 if (this->z2_soft_start_pending_ || this->z2_soft_start_active_)
                     this->reset_z2_soft_start_("defrost started");
+                if (this->z2_target_delta_soft_start_pending_ || this->z2_target_delta_soft_start_active_)
+                    this->reset_z2_target_delta_soft_start_("defrost started");
                 auto &status = this->state_.ecodan_instance->get_status();
                 DefrostState state_before_defrost{};
 
@@ -380,10 +403,12 @@ namespace esphome
             }
         }
 
-        void Optimizer::on_compressor_state_change(bool x, bool x_previous)
+        void Optimizer::on_compressor_state_change(bool x, bool x_previous, bool initial_observation)
         {
-            if (x_previous && !x)
+            if (x_previous && !x) {
                 this->reset_z2_soft_start_("compressor stopped");
+                this->reset_z2_target_delta_soft_start_("compressor stopped");
+            }
             if (millis() < 60000) 
                 return;
 
@@ -397,7 +422,9 @@ namespace esphome
                 auto &status = this->state_.ecodan_instance->get_status();
                 if (!status.DefrostActive)
                 {
-                    ESP_LOGI(OPTIMIZER_CYCLE_TAG, "Compressor START detected");
+                    ESP_LOGI(OPTIMIZER_CYCLE_TAG, initial_observation
+                             ? "Compressor already running at ESP startup; target-delta ramp is not initialized mid-cycle."
+                             : "Compressor START detected");
                     this->compressor_start_time_ = millis();
                     if (this->state_.z2_soft_start_enabled != nullptr
                         && this->state_.z2_soft_start_enabled->state
@@ -411,6 +438,28 @@ namespace esphome
                         this->z2_soft_start_initial_flow_ = NAN;
                         this->z2_soft_start_last_step_ = -1;
                         ESP_LOGI(OPTIMIZER_TAG, "Z2 soft-start armed after compressor start; waiting for first valid AA flow calculation.");
+                    }
+                    if (!initial_observation
+                        && this->aa_enabled()
+                        && this->state_.z2_target_delta_soft_start_enabled != nullptr
+                        && this->state_.z2_target_delta_soft_start_enabled->state
+                        && status.Operation == esphome::ecodan::Status::OperationMode::HEAT_ON
+                        && status.has_2zones()
+                        && status.is_auto_adaptive_heating(esphome::ecodan::Zone::ZONE_2)
+                        && status.is_heating_active(esphome::ecodan::Zone::ZONE_2)
+                        && this->state_.heating_system_type != nullptr
+                        && this->state_.heating_system_type->active_index().value_or(0) <= 1) {
+                        this->z2_target_delta_soft_start_pending_ = true;
+                        this->z2_target_delta_soft_start_active_ = false;
+                        this->z2_target_delta_soft_start_reached_raw_ = false;
+                        this->z2_target_delta_last_step_ = -1;
+                        this->z2_target_delta_initial_raw_ = NAN;
+                        this->z2_target_delta_max_raw_seen_ = NAN;
+                        ESP_LOGI(OPTIMIZER_TAG, "Z2 target-delta soft-start armed after compressor start; waiting for first valid normal AA calculation.");
+                    } else if (initial_observation && x
+                               && this->state_.z2_target_delta_soft_start_enabled != nullptr
+                               && this->state_.z2_target_delta_soft_start_enabled->state) {
+                        ESP_LOGW(OPTIMIZER_TAG, "Compressor was already running at ESP startup; target-delta ramp will not restart mid-cycle. It will arm at the next genuine compressor start.");
                     }
                 }
                 if (this->state_.auto_adaptive_control_enabled->state)

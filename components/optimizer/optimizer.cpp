@@ -55,6 +55,11 @@ namespace esphome
 
             if (this->state_.status_compressor != nullptr) {
                 this->state_.status_compressor->add_on_state_callback([this, update_if_changed](float x) {
+                    if (std::isnan(this->last_compressor_status_)) {
+                        this->last_compressor_status_ = x;
+                        this->on_compressor_state_change(static_cast<bool>(x), false, true);
+                        return;
+                    }
                     update_if_changed(this->last_compressor_status_, x, [this](float new_v, float old_v) {
                         this->on_compressor_state_change(static_cast<bool>(new_v), static_cast<bool>(old_v));
                     });

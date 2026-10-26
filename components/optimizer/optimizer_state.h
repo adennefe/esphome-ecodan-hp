@@ -63,6 +63,7 @@ namespace esphome
         esphome::switch_::Switch *defrost_risk_handling_enabled{nullptr};
         esphome::switch_::Switch *smart_boost_enabled{nullptr};
         esphome::switch_::Switch *z2_soft_start_enabled{nullptr};
+        esphome::switch_::Switch *z2_target_delta_soft_start_enabled{nullptr};
         esphome::switch_::Switch *relay_switch_z1{nullptr};
         esphome::switch_::Switch *relay_switch_z2{nullptr};
         esphome::switch_::Switch *sw_odin_override_z1{nullptr};
@@ -87,6 +88,9 @@ namespace esphome
         esphome::number::Number *z2_guard_delta_t_tolerance{nullptr};
         esphome::number::Number *z2_soft_start_step{nullptr};
         esphome::number::Number *z2_soft_start_interval_minutes{nullptr};
+        esphome::number::Number *z2_target_delta_start{nullptr};
+        esphome::number::Number *z2_target_delta_step{nullptr};
+        esphome::number::Number *z2_target_delta_interval_minutes{nullptr};
         esphome::number::Number *temperature_feedback_z1;
         esphome::number::Number *temperature_feedback_z2;
         esphome::number::Number *maximum_heating_flow_temp;

@@ -69,15 +69,109 @@ namespace esphome
         // Heating flow calculation (Delta-T + defrost ramp + step-down)
         // ─────────────────────────────────────────────────────────────────
 
+        float Optimizer::apply_z2_target_delta_soft_start_(float raw_target_delta,
+                                                             const ecodan::Status &status,
+                                                             int heating_type_index)
+        {
+            auto *enabled = this->state_.z2_target_delta_soft_start_enabled;
+            if (enabled == nullptr || !enabled->state) {
+                if (this->z2_target_delta_soft_start_pending_ || this->z2_target_delta_soft_start_active_)
+                    this->reset_z2_target_delta_soft_start_("disabled by user");
+                return raw_target_delta;
+            }
+
+            const bool eligible = status.Operation == ecodan::Status::OperationMode::HEAT_ON
+                                  && !status.DefrostActive
+                                  && status.is_auto_adaptive_heating(ecodan::Zone::ZONE_2)
+                                  && status.is_heating_active(ecodan::Zone::ZONE_2)
+                                  && heating_type_index <= 1;
+            if (!eligible) {
+                if (this->z2_target_delta_soft_start_pending_ || this->z2_target_delta_soft_start_active_) {
+                    const char *reason = status.DefrostActive ? "defrost active"
+                                         : status.Operation != ecodan::Status::OperationMode::HEAT_ON ? "operation left heating"
+                                         : heating_type_index > 1 ? "heating profile is not underfloor"
+                                         : "zone 2 heating inactive";
+                    this->reset_z2_target_delta_soft_start_(reason);
+                }
+                return raw_target_delta;
+            }
+
+            if (!std::isfinite(raw_target_delta) || raw_target_delta <= 0.0f) {
+                ESP_LOGW(OPTIMIZER_TAG, "Z2 target-delta soft-start: invalid raw target_delta %.3f; no ramp value applied.", raw_target_delta);
+                return raw_target_delta;
+            }
+
+            if (this->z2_target_delta_soft_start_pending_) {
+                float start_value = this->state_.z2_target_delta_start != nullptr
+                                    ? this->state_.z2_target_delta_start->state : 1.0f;
+                if (!std::isfinite(start_value)) start_value = 1.0f;
+                start_value = std::clamp(start_value, 0.1f, 6.5f);
+                this->z2_target_delta_initial_raw_ = raw_target_delta;
+                this->z2_target_delta_max_raw_seen_ = raw_target_delta;
+                this->z2_target_delta_start_value_ = start_value;
+                this->z2_target_delta_ramp_value_ = start_value;
+                this->z2_target_delta_start_ms_ = millis();
+                this->z2_target_delta_last_step_ = -1;
+                this->z2_target_delta_soft_start_pending_ = false;
+                this->z2_target_delta_soft_start_active_ = true;
+                ESP_LOGI(OPTIMIZER_TAG,
+                         "Z2 target-delta soft-start started: raw target_delta %.2f K; ramp starts at %.2f K.",
+                         raw_target_delta, start_value);
+            }
+
+            if (!this->z2_target_delta_soft_start_active_)
+                return raw_target_delta;
+
+            this->z2_target_delta_max_raw_seen_ = std::max(this->z2_target_delta_max_raw_seen_, raw_target_delta);
+
+            float increment = this->state_.z2_target_delta_step != nullptr
+                              ? this->state_.z2_target_delta_step->state : 0.5f;
+            float interval_minutes = this->state_.z2_target_delta_interval_minutes != nullptr
+                                     ? this->state_.z2_target_delta_interval_minutes->state : 10.0f;
+            if (!std::isfinite(increment)) increment = 0.5f;
+            increment = std::clamp(increment, 0.1f, 2.0f);
+            if (!std::isfinite(interval_minutes)) interval_minutes = 10.0f;
+            interval_minutes = std::clamp(interval_minutes, 1.0f, 60.0f);
+
+            const uint32_t interval_ms = static_cast<uint32_t>(interval_minutes * 60000.0f);
+            const uint32_t elapsed_ms = millis() - this->z2_target_delta_start_ms_;
+            const int32_t step_index = static_cast<int32_t>(elapsed_ms / interval_ms);
+            const float ramp_candidate = std::min(6.5f, this->z2_target_delta_start_value_ + step_index * increment);
+            const float ramp_value = std::min(raw_target_delta, ramp_candidate);
+            const float effective_target_delta = std::min(raw_target_delta, ramp_value);
+            const uint32_t until_next_ms = interval_ms - (elapsed_ms % interval_ms);
+            this->z2_target_delta_ramp_value_ = ramp_value;
+
+            if (step_index != this->z2_target_delta_last_step_) {
+                this->z2_target_delta_last_step_ = step_index;
+                ESP_LOGI(OPTIMIZER_TAG,
+                         "Z2 target-delta soft-start step %ld: ramp candidate %.2f K, applied ramp %.2f K, raw %.2f K, effective %.2f K.",
+                         static_cast<long>(step_index), ramp_candidate, ramp_value, raw_target_delta, effective_target_delta);
+            }
+            ESP_LOGD(OPTIMIZER_TAG,
+                     "Z2 target_delta: initial raw=%.2f K max raw seen=%.2f K current raw=%.2f K ramp candidate=%.2f K applied ramp=min(raw,candidate)=%.2f K effective=%.2f K; next step in %.1f min.",
+                     this->z2_target_delta_initial_raw_, this->z2_target_delta_max_raw_seen_, raw_target_delta, ramp_candidate, ramp_value,
+                     effective_target_delta, until_next_ms / 60000.0f);
+
+            if (ramp_candidate >= this->z2_target_delta_max_raw_seen_ - 0.001f && !this->z2_target_delta_soft_start_reached_raw_) {
+                this->z2_target_delta_soft_start_reached_raw_ = true;
+                ESP_LOGI(OPTIMIZER_TAG,
+                         "Z2 target-delta soft-start complete: ramp reached maximum raw target_delta observed during ramp (%.2f K); normal AA control resumes.",
+                         this->z2_target_delta_max_raw_seen_);
+                this->z2_target_delta_soft_start_active_ = false;
+                return raw_target_delta;
+            }
+            return effective_target_delta;
+        }
+
         float Optimizer::calculate_heating_flow_(std::size_t zone_i,
                                                   const ecodan::Status &status,
                                                   const HeatingProfile &prof,
                                                   bool set_point_reached,
-                                                  float cold_factor,
                                                   float actual_outside_temp,
                                                   float zone_min, float zone_max,
-                                                  float error_factor,
-                                                  float smart_boost) {
+                                                  float raw_target_delta,
+                                                  int heating_type_index) {
 
             auto defrost_state = this->resolve_defrost_state_();
             float locked_return_temp = defrost_state.get_return_temp(
@@ -90,10 +184,6 @@ namespace esphome
             if (!isnan(locked_return_temp)) {
                 actual_return_temp = locked_return_temp;
             }
-
-            float dynamic_min = prof.base_min_delta_t +
-                                cold_factor * (prof.min_delta_cold_limit - prof.base_min_delta_t);
-            float target_delta = dynamic_min + error_factor * smart_boost * (prof.max_delta_t - dynamic_min);
 
             if (isnan(actual_return_temp)) {
                 ESP_LOGE(OPTIMIZER_TAG, "Z%d HEATING: actual_return_temp is NAN. Reverting to %.2f°C.",
@@ -119,24 +209,38 @@ namespace esphome
                 is_defrost_weather = true;
             }
 
+            float effective_target_delta = raw_target_delta;
+            if (zone_i == 1 && !(is_defrost_weather && defrost_enabled))
+                effective_target_delta = this->apply_z2_target_delta_soft_start_(raw_target_delta, status, heating_type_index);
+
+            float normal_pre_limit_flow;
+            float effective_pre_limit_flow;
             if (is_defrost_weather && defrost_enabled) {
                 float ratio       = std::clamp((float)(now - this->last_defrost_time_) / prof.defrost_memory_ms, 0.0f, 1.0f);
-                float ramped_delta = prof.base_min_delta_t + fmax(target_delta - prof.base_min_delta_t, 0.0f) * ratio;
+                float ramped_delta = prof.base_min_delta_t + fmax(raw_target_delta - prof.base_min_delta_t, 0.0f) * ratio;
                 calculated_flow   = actual_return_temp + ramped_delta;
                 calculated_flow   = this->round_nearest(calculated_flow);
+                normal_pre_limit_flow = calculated_flow;
+                effective_pre_limit_flow = calculated_flow;
                 ESP_LOGW(OPTIMIZER_TAG, "Z%d Defrost Recovery: %.0f%% done. Flow: %.2f",
                          (zone_i + 1), ratio * 100.0f, calculated_flow);
             } else {
                 if (set_point_reached) {
                     // Setpoint reached — fall back to base delta
-                    calculated_flow = actual_return_temp + prof.base_min_delta_t;
-                    ESP_LOGD(OPTIMIZER_TAG, "Z%d Setpoint reached. Base delta T.", (zone_i + 1));
+                    normal_pre_limit_flow = actual_return_temp + prof.base_min_delta_t;
+                    calculated_flow = actual_return_temp + std::min(prof.base_min_delta_t, effective_target_delta);
+                    ESP_LOGD(OPTIMIZER_TAG, "Z%d Setpoint reached. Base delta T capped by effective target_delta if lower.", (zone_i + 1));
                 } else {
-                    calculated_flow = actual_return_temp + target_delta;
+                    normal_pre_limit_flow = actual_return_temp + raw_target_delta;
+                    calculated_flow = actual_return_temp + effective_target_delta;
                 }
-
-                ESP_LOGD(OPTIMIZER_TAG, "Z%d HEATING: flow=%.2f°C, return=%.2f°C", (zone_i + 1), calculated_flow, actual_return_temp);
+                effective_pre_limit_flow = calculated_flow;
             }
+
+            ESP_LOGD(OPTIMIZER_TAG,
+                     "Z%d HEATING AA flow: raw_delta=%.2f K -> normal %.2f C; effective_delta=%.2f K -> %.2f C before limits (return %.2f C).",
+                     (zone_i + 1), raw_target_delta, normal_pre_limit_flow,
+                     effective_target_delta, effective_pre_limit_flow, actual_return_temp);
 
             float soft_start_floor = NAN;
             bool soft_start_started_now = false;
@@ -185,9 +289,19 @@ namespace esphome
             // skipped during the defrost recovery ramp — pre-refactor behavior.
             calculated_flow = this->apply_flow_limits(
                 (zone_i == 0) ? OptimizerZone::ZONE_1 : OptimizerZone::ZONE_2,
-                calculated_flow, target_delta,
+                calculated_flow, effective_target_delta,
                 (is_defrost_weather && defrost_enabled) ? NAN : actual_return_temp,
                 soft_start_floor);
+
+            ESP_LOGD(OPTIMIZER_TAG,
+                     "Z%d HEATING requested flow after guard/step/min/max/flow-soft-start: %.2f C (effective-delta pre-limit %.2f C).",
+                     (zone_i + 1), calculated_flow, effective_pre_limit_flow);
+            if (std::isfinite(zone_min) && effective_pre_limit_flow < zone_min - 0.05f
+                && calculated_flow >= zone_min - 0.05f) {
+                ESP_LOGI(OPTIMIZER_TAG,
+                         "Z%d minimum flow limit %.2f C overrides lower effective target_delta flow %.2f C; requested flow is %.2f C.",
+                         (zone_i + 1), zone_min, effective_pre_limit_flow, calculated_flow);
+            }
 
             if (soft_start_started_now)
                 ESP_LOGI(OPTIMIZER_TAG, "Z2 soft-start started: first valid AA flow %.1f°C; configured minimum %.1f°C; step %.1f K / %.0f min.",
@@ -323,8 +437,8 @@ namespace esphome
             if (is_heating_mode) {
                 out_flow_heat = this->calculate_heating_flow_(
                     i, status, prof, set_point_reached,
-                    cold_factor, actual_outside_temp,
-                    zone_min, zone_max, error_factor, smart_boost);
+                    actual_outside_temp,
+                    zone_min, zone_max, target_delta, heating_type_index);
             } else if (is_cooling_mode && is_cooling_active) {
                 out_flow_cool = this->calculate_cooling_flow_(i, status, target_delta);
             }

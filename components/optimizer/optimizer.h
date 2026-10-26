@@ -74,6 +74,15 @@ namespace esphome
       int32_t z2_soft_start_last_step_{-1};
       float z2_soft_start_initial_flow_{NAN};
       float z2_soft_start_floor_{NAN};
+      bool z2_target_delta_soft_start_pending_{false};
+      bool z2_target_delta_soft_start_active_{false};
+      bool z2_target_delta_soft_start_reached_raw_{false};
+      uint32_t z2_target_delta_start_ms_{0};
+      int32_t z2_target_delta_last_step_{-1};
+      float z2_target_delta_initial_raw_{NAN};
+      float z2_target_delta_max_raw_seen_{NAN};
+      float z2_target_delta_start_value_{NAN};
+      float z2_target_delta_ramp_value_{NAN};
       uint32_t last_defrost_time_     = 0;
       DefrostState state_before_defrost_;
 
@@ -100,11 +109,14 @@ namespace esphome
                                                const ecodan::Status &status,
                                                const HeatingProfile &prof,
                                                bool set_point_reached,
-                                               float cold_factor,
                                                float actual_outside_temp,
                                                float zone_min, float zone_max,
-                                               float error_factor,
-                                               float smart_boost);
+                                               float raw_target_delta,
+                                               int heating_type_index);
+      float apply_z2_target_delta_soft_start_(float raw_target_delta,
+                                               const ecodan::Status &status,
+                                               int heating_type_index);
+      void reset_z2_target_delta_soft_start_(const char *reason);
       float            calculate_cooling_flow_(std::size_t zone_i,
                                                const ecodan::Status &status,
                                                float target_delta_t);
@@ -155,9 +167,10 @@ namespace esphome
 
       // Compressor / defrost events
       void on_compressor_stop();
-      void on_compressor_state_change(bool x, bool x_previous);
+      void on_compressor_state_change(bool x, bool x_previous, bool initial_observation = false);
       void on_defrost_state_change(bool x, bool x_previous);
       void cancel_z2_soft_start();
+      void cancel_z2_target_delta_soft_start();
 
       // Lockout
       void restore_pre_lockout_state();
