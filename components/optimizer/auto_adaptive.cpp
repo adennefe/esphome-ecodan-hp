@@ -210,7 +210,8 @@ namespace esphome
             }
 
             float effective_target_delta = raw_target_delta;
-            if (zone_i == 1 && !(is_defrost_weather && defrost_enabled))
+            if (zone_i == 1 && !this->z2_return_startup_.claimed_cycle()
+                && !(is_defrost_weather && defrost_enabled))
                 effective_target_delta = this->apply_z2_target_delta_soft_start_(raw_target_delta, status, heating_type_index);
 
             float normal_pre_limit_flow;
@@ -243,6 +244,32 @@ namespace esphome
                      effective_target_delta, effective_pre_limit_flow, actual_return_temp);
 
             float soft_start_floor = NAN;
+            ReturnGuidedStartup::Result return_startup_result;
+            if (zone_i == 1 && this->z2_return_startup_.owns_flow()) {
+                const auto previous_phase = this->z2_return_startup_.phase();
+                const float offset = this->state_.z2_startup_return_offset->state;
+                return_startup_result = this->z2_return_startup_.calculate(
+                    millis(), this->state_.z2_return_guided_startup->state,
+                    this->return_startup_ineligible_reason_(status) == nullptr,
+                    status.HpReturnTemperature, offset, this->state_.z2_startup_duration->state, normal_pre_limit_flow, zone_min, zone_max);
+                if (return_startup_result.apply) {
+                    calculated_flow = return_startup_result.target;
+                    soft_start_floor = return_startup_result.minimum_override;
+                    ESP_LOGD(OPTIMIZER_TAG,
+                        "[Z2 STARTUP] WP return=%.2f C; offset=%.1f K; startup before guards=%.2f C; finish at Z2 min=%.2f C; normal AA before min=%.2f C; frequency=%u Hz; elapsed=%lu s / %.0f s.",
+                        status.HpReturnTemperature, offset, calculated_flow, zone_min, normal_pre_limit_flow,
+                        static_cast<unsigned>(status.CompressorFrequency),
+                        static_cast<unsigned long>(this->z2_return_startup_.elapsed_ms(millis()) / 1000),
+                        this->state_.z2_startup_duration->state * 60.0f);
+                }
+                if (previous_phase != this->z2_return_startup_.phase()) {
+                    ESP_LOGI(OPTIMIZER_TAG,
+                        "[Z2 STARTUP] %s; no timed ramp. Next regular AA cycle resumes normal control.",
+                        this->z2_return_startup_.waiting_for_aa() ? this->z2_return_startup_.completion_reason() : "Startup cancelled");
+                    this->publish_return_guided_startup_();
+                }
+            }
+
             bool soft_start_started_now = false;
             bool soft_start_completed_now = false;
             int32_t soft_start_step = -1;
@@ -250,7 +277,8 @@ namespace esphome
             if (zone_i == 1 && (this->z2_soft_start_pending_ || this->z2_soft_start_active_)
                 && (this->state_.z2_soft_start_enabled == nullptr || !this->state_.z2_soft_start_enabled->state))
                 this->reset_z2_soft_start_("disabled by user");
-            if (zone_i == 1 && this->state_.z2_soft_start_enabled != nullptr
+            if (zone_i == 1 && !this->z2_return_startup_.claimed_cycle()
+                && this->state_.z2_soft_start_enabled != nullptr
                 && this->state_.z2_soft_start_enabled->state
                 && status.Operation == ecodan::Status::OperationMode::HEAT_ON
                 && !status.DefrostActive
@@ -293,10 +321,20 @@ namespace esphome
                 (is_defrost_weather && defrost_enabled) ? NAN : actual_return_temp,
                 soft_start_floor);
 
+            if (return_startup_result.apply) {
+                // Startup completion is based on its requested target before guards.
+                ESP_LOGD(OPTIMIZER_TAG,
+                         "[Z2 STARTUP] Applied target after buffer/stop guards, rounding and max=%.2f C (startup %.2f C, normal AA %.2f C). Guards may override the startup ceiling.",
+                         calculated_flow, return_startup_result.target, normal_pre_limit_flow);
+                if (std::fabs(calculated_flow - return_startup_result.target) >= 0.1f)
+                    ESP_LOGD(OPTIMIZER_TAG, "[Z2 STARTUP] Guard/temperature limit overrode startup target: %.2f -> %.2f C; see preceding limit message.",
+                             return_startup_result.target, calculated_flow);
+            }
+
             ESP_LOGD(OPTIMIZER_TAG,
                      "Z%d HEATING requested flow after guard/step/min/max/flow-soft-start: %.2f C (effective-delta pre-limit %.2f C).",
                      (zone_i + 1), calculated_flow, effective_pre_limit_flow);
-            if (std::isfinite(zone_min) && effective_pre_limit_flow < zone_min - 0.05f
+            if (!return_startup_result.apply && std::isfinite(zone_min) && effective_pre_limit_flow < zone_min - 0.05f
                 && calculated_flow >= zone_min - 0.05f) {
                 ESP_LOGI(OPTIMIZER_TAG,
                          "Z%d minimum flow limit %.2f C overrides lower effective target_delta flow %.2f C; requested flow is %.2f C.",
@@ -448,19 +486,31 @@ namespace esphome
         // Main loop entry point
         // ─────────────────────────────────────────────────────────────────
 
-        void Optimizer::run_auto_adaptive_loop() {
+        void Optimizer::run_auto_adaptive_loop(bool z2_startup_only) {
             if (this->adaptive_loop_running_) {
                 ESP_LOGD(OPTIMIZER_TAG, "run_auto_adaptive_loop: re-entrant call ignored");
                 return;
             }
+            if (z2_startup_only && this->z2_return_startup_.waiting_for_aa()) return;
+            if (!z2_startup_only && this->z2_return_startup_.waiting_for_aa()) {
+                ESP_LOGI(OPTIMIZER_TAG, "[Z2 STARTUP] Regular AA cycle resumes normal flow control; no handover ramp.");
+                // The regular AA target supersedes any protective boost's old base.
+                this->clear_predictive_boost_(OptimizerZone::ZONE_2, false);
+                this->z2_return_startup_.resume_normal_aa();
+            }
             this->adaptive_loop_running_ = true;
+
+            if (this->z2_return_startup_.owns_flow()) {
+                const char *reason = this->return_startup_ineligible_reason_(this->state_.ecodan_instance->get_status());
+                if (reason != nullptr) this->cancel_return_guided_startup_(reason);
+            }
 
             bool aa_enabled = this->aa_enabled();
             auto *override_z1 = this->state_.sw_odin_override_z1;
             auto *override_z2 = this->state_.sw_odin_override_z2;
 
             // If the user disables Auto Adaptive, we must ensure the hardware relays are released.
-            if (!aa_enabled) {
+            if (!aa_enabled && !z2_startup_only) {
                 // While the ODIN forwarder is still holding a valid command,
                 // it owns the relay override. Releasing it here would hand
                 // the relay back to the virtual thermostat under ODIN's feet.
@@ -475,7 +525,7 @@ namespace esphome
                     }
                 }
             }
-            else {
+            else if (!z2_startup_only) {
                 // AA enabled: the override belongs to the ODIN forwarder only
                 // while it holds a valid command. Outside takeover the virtual
                 // thermostat must keep owning the relay — otherwise a released
@@ -495,6 +545,10 @@ namespace esphome
 
             auto &status = this->state_.ecodan_instance->get_status();
 
+            if (z2_startup_only && !status.has_independent_zone_temps()) {
+                this->adaptive_loop_running_ = false;
+                return;
+            }
 
             if (this->is_system_hands_off(status)) {
                 ESP_LOGD(OPTIMIZER_TAG, "System is busy (DHW/Defrost/Lockout). Exiting.");
@@ -569,11 +623,21 @@ namespace esphome
             float flows_heat[2] = {0.0f,   0.0f};
             float flows_cool[2] = {100.0f, 100.0f};
 
-            for (std::size_t i = 0; i < max_zones; i++) {
+            const auto saved_stagnation_start = this->stagnation_start_time_;
+            const float saved_error = this->last_error_;
+            const float saved_boost = this->current_stagnation_boost_;
+            for (std::size_t i = z2_startup_only ? 1 : 0; i < max_zones; i++) {
                 this->process_adaptive_zone_(
                     i, status, prof, cold_factor, actual_outside_temp,
                     max_flow[i], min_flow[i],
                     flows_heat[i], flows_cool[i]);
+            }
+            // Extra Z2 updates must not advance the shared smart-boost history
+            // or generate additional Z1 setpoints/relay writes.
+            if (z2_startup_only) {
+                this->stagnation_start_time_ = saved_stagnation_start;
+                this->last_error_ = saved_error;
+                this->current_stagnation_boost_ = saved_boost;
             }
 
             bool heating_demand = flows_heat[0] > 0.0f || flows_heat[1] > 0.0f;
@@ -581,7 +645,7 @@ namespace esphome
 
             if (status.has_independent_zone_temps()) {
                 if (heating_demand) {
-                    if (status.is_auto_adaptive_heating(esphome::ecodan::Zone::ZONE_1) &&
+                    if (!z2_startup_only && status.is_auto_adaptive_heating(esphome::ecodan::Zone::ZONE_1) &&
                         status.Zone1FlowTemperatureSetPoint != flows_heat[0])
                         set_flow_temp(flows_heat[0], OptimizerZone::ZONE_1);
 
@@ -590,7 +654,7 @@ namespace esphome
                         set_flow_temp(flows_heat[1], OptimizerZone::ZONE_2);
 
                 } else if (cooling_demand) {
-                    if (status.is_auto_adaptive_cooling(esphome::ecodan::Zone::ZONE_1) &&
+                    if (!z2_startup_only && status.is_auto_adaptive_cooling(esphome::ecodan::Zone::ZONE_1) &&
                         status.Zone1FlowTemperatureSetPoint != flows_cool[0])
                         set_flow_temp(flows_cool[0], OptimizerZone::ZONE_1);
 

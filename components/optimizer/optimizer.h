@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include "optimizer_state.h"
+#include "return_guided_startup.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include <lwip/netdb.h>
@@ -68,6 +69,14 @@ namespace esphome
       const float MAX_FEED_STEP_ADJUSTMENT = 1.0f;
 
       uint32_t compressor_start_time_ = 0;
+      ReturnGuidedStartup z2_return_startup_;
+      uint32_t return_startup_service_ms_{0};
+      bool startup_compressor_observed_{false};
+      bool wp_return_observed_{false};
+      uint32_t wp_return_received_ms_{0};
+      const char *return_startup_ineligible_reason_(const ecodan::Status &status);
+      void cancel_return_guided_startup_(const char *reason);
+      void publish_return_guided_startup_();
       bool z2_soft_start_pending_{false};
       bool z2_soft_start_active_{false};
       uint32_t z2_soft_start_start_ms_{0};
@@ -162,12 +171,14 @@ namespace esphome
       Optimizer(OptimizerState state);
 
       // Main loops
-      void run_auto_adaptive_loop();
+      void run_auto_adaptive_loop(bool z2_startup_only = false);
       void predictive_short_cycle_check();
 
       // Compressor / defrost events
       void on_compressor_stop();
-      void on_compressor_state_change(bool x, bool x_previous, bool initial_observation = false);
+      void on_compressor_state_change(bool x, bool x_previous, bool initial_observation = false,
+                                      bool initial_startup_observation = false);
+      void service_return_guided_startup(bool force = false);
       void on_defrost_state_change(bool x, bool x_previous);
       void cancel_z2_soft_start();
       void cancel_z2_target_delta_soft_start();

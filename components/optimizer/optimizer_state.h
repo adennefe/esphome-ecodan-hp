@@ -64,6 +64,11 @@ namespace esphome
         esphome::switch_::Switch *smart_boost_enabled{nullptr};
         esphome::switch_::Switch *z2_soft_start_enabled{nullptr};
         esphome::switch_::Switch *z2_target_delta_soft_start_enabled{nullptr};
+        esphome::switch_::Switch *z2_return_guided_startup{nullptr};
+        esphome::number::Number *z2_startup_return_offset{nullptr};
+        esphome::number::Number *z2_startup_duration{nullptr};
+        esphome::binary_sensor::BinarySensor *z2_startup_active{nullptr};
+        esphome::sensor::Sensor *hp_return_temp{nullptr};
         esphome::switch_::Switch *relay_switch_z1{nullptr};
         esphome::switch_::Switch *relay_switch_z2{nullptr};
         esphome::switch_::Switch *sw_odin_override_z1{nullptr};

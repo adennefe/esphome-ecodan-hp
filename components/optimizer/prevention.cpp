@@ -11,6 +11,17 @@ namespace esphome
 
         void Optimizer::predictive_short_cycle_check_for_zone_(const ecodan::Status &status, OptimizerZone zone, bool is_cooling) {
 
+            if (zone == OptimizerZone::ZONE_2 && !is_cooling && this->z2_return_startup_.owns_flow()) {
+                // One writer: AA applies the same enforce_step_limit() stop guard,
+                // followed by the startup-specific minimum and the configured max.
+                // A second predictive writer would reapply the ordinary minimum
+                // every 30 s, fighting the startup writer and creating oscillations.
+                this->clear_predictive_boost_(zone, false);
+                ESP_LOGD(OPTIMIZER_CYCLE_TAG, "[Z2 STARTUP] Compressor-stop guard handled by the AA write path; separate predictive writer deferred.");
+                this->service_return_guided_startup();
+                return;
+            }
+
             // base_setpoint != NAN is the single source of truth for "a boost is active".
             float &base_setpoint = (zone == OptimizerZone::ZONE_2) ? this->predictive_boost_base_z2_setpoint_ : this->predictive_boost_base_z1_setpoint_;
 
@@ -76,6 +87,12 @@ namespace esphome
             if (is_cooling || !this->is_post_dhw_window(status))
             {
                 auto limits = is_cooling ? this->get_cool_flow_limits(zone) : this->get_flow_limits(zone);
+                if (zone == OptimizerZone::ZONE_2 && !is_cooling && this->z2_return_startup_.waiting_for_aa()) {
+                    // Keep the last startup level until the scheduled AA cycle,
+                    // while allowing the existing 0.5 K predictive protection.
+                    // Restoring the ordinary minimum here would end the hold early.
+                    limits.min = std::clamp(std::min(limits.min, live_setpoint), 20.0f, limits.max);
+                }
                 step_limited = this->clamp_flow_temp(step_limited, limits.min, limits.max);
             }
             this->set_flow_temp(step_limited, zone);

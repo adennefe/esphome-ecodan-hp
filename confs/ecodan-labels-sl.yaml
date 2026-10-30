@@ -1,4 +1,8 @@
 substitutions:
+  z2_return_guided_startup: 'Auto-Adaptive: Z2 Return-Guided Startup'
+  z2_startup_return_offset: 'Auto-Adaptive: Z2 Startup Return Offset'
+  z2_startup_duration: 'Auto-Adaptive: Z2 Startup Duration'
+  z2_startup_active: 'Auto-Adaptive: Z2 Startup Active'
   status_three_way_valve: 3-potni ventil
   status_three_way_valve_2: 3-potni ventil 2
   heatpump_climate_dhw: TSV regulacija

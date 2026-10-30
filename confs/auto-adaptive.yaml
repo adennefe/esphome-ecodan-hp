@@ -34,6 +34,11 @@ esphome:
             state.smart_boost_enabled = id(smart_boost_enabled);
             state.z2_soft_start_enabled = id(z2_soft_start_enabled);
             state.z2_target_delta_soft_start_enabled = id(z2_target_delta_soft_start_enabled);
+            state.z2_return_guided_startup = id(z2_return_guided_startup);
+            state.z2_startup_return_offset = id(z2_startup_return_offset);
+            state.z2_startup_duration = id(z2_startup_duration);
+            state.z2_startup_active = id(z2_startup_active);
+            state.hp_return_temp = id(hp_return_temp);
             ${asgard_prefix} state.bin_odin_forwarder_takeover = id(bin_odin_forwarder_takeover);
 
             state.status_short_cycle_lockout = id(status_short_cycle_lockout);
@@ -100,11 +105,34 @@ esphome:
 
         - lambda: id(optimizer_ptr)->update_boost_sensor();
         - lambda: id(optimizer_ptr)->check_lockout_expiration();
+        - binary_sensor.template.publish:
+            id: z2_startup_active
+            state: OFF
 
 # needed to trigger codegen
 optimizer:
 
 number:
+  - platform: template
+    id: z2_startup_return_offset
+    name: ${z2_startup_return_offset}
+    unit_of_measurement: "K"
+    optimistic: true
+    restore_value: true
+    initial_value: 1.0
+    min_value: 0.0
+    max_value: 3.0
+    step: 0.1
+  - platform: template
+    id: z2_startup_duration
+    name: ${z2_startup_duration}
+    unit_of_measurement: "min"
+    optimistic: true
+    restore_value: true
+    initial_value: 15
+    min_value: 5
+    max_value: 60
+    step: 5
   - platform: template
     id: maximum_heating_flow_temp
     name: ${maximum_heating_flow_temp}
@@ -389,6 +417,16 @@ select:
 
 switch:
   - platform: template
+    id: z2_return_guided_startup
+    name: ${z2_return_guided_startup}
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    on_turn_off:
+      then:
+        - lambda: |-
+            if (id(optimizer_ptr) != nullptr)
+              id(optimizer_ptr)->service_return_guided_startup(true);
+  - platform: template
     name: ${auto_adaptive_control_enabled}
     id: auto_adaptive_control_enabled
     restore_mode: RESTORE_DEFAULT_OFF
@@ -444,6 +482,10 @@ switch:
 
 binary_sensor:
   - platform: template
+    id: z2_startup_active
+    name: ${z2_startup_active}
+    entity_category: diagnostic
+  - platform: template
     id: status_predictive_boost_active
     name: ${status_predictive_boost_active}
   - platform: ecodan
@@ -483,6 +525,7 @@ button:
 interval:
   - interval: 30s
     then:
+      - lambda: id(optimizer_ptr)->service_return_guided_startup();
       - lambda: id(optimizer_ptr)->check_lockout_expiration();
       - lambda: id(optimizer_ptr)->predictive_short_cycle_check();
   - interval: ${update_interval_minutes}

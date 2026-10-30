@@ -181,6 +181,10 @@ namespace esphome
         }
 
         bool Optimizer::set_flow_temp(float flow, OptimizerZone zone) {
+            if (zone == OptimizerZone::ZONE_2 && this->z2_return_startup_.claimed_cycle() && !std::isfinite(flow)) {
+                ESP_LOGW(OPTIMIZER_TAG, "Z%d refusing non-finite flow command.", static_cast<int>(zone));
+                return false;
+            }
             auto &status = this->state_.ecodan_instance->get_status();
 
             // Treat setpoints within half the 0.1°C control resolution as unchanged, so
@@ -283,6 +287,7 @@ namespace esphome
                 this->reset_z2_soft_start_("operation left heating");
             if (new_mode != heating_mode && (this->z2_target_delta_soft_start_pending_ || this->z2_target_delta_soft_start_active_))
                 this->reset_z2_target_delta_soft_start_("operation left heating");
+            if (new_mode != heating_mode) this->cancel_return_guided_startup_("operation left heating / DHW");
 
             bool entering_dhw = (new_mode == dhw_mode || new_mode == legionella_mode)
                              && (previous_mode != dhw_mode && previous_mode != legionella_mode);
@@ -370,6 +375,7 @@ namespace esphome
             // New defrost, store outside temp
             if (!x_previous && x)
             {
+                this->cancel_return_guided_startup_("defrost started");
                 if (this->z2_soft_start_pending_ || this->z2_soft_start_active_)
                     this->reset_z2_soft_start_("defrost started");
                 if (this->z2_target_delta_soft_start_pending_ || this->z2_target_delta_soft_start_active_)
@@ -403,14 +409,38 @@ namespace esphome
             }
         }
 
-        void Optimizer::on_compressor_state_change(bool x, bool x_previous, bool initial_observation)
+        void Optimizer::on_compressor_state_change(bool x, bool x_previous, bool initial_observation,
+                                                  bool initial_startup_observation)
         {
+            auto &startup_status = this->state_.ecodan_instance->get_status();
+            const bool startup_enabled = this->state_.z2_return_guided_startup != nullptr
+                                         && this->state_.z2_return_guided_startup->state;
+            const bool startup_eligible = startup_enabled && this->return_startup_ineligible_reason_(startup_status) == nullptr;
+            if (!x) this->cancel_return_guided_startup_("compressor stopped");
+            const bool startup_started = this->z2_return_startup_.compressor_event(
+                millis(), x, x_previous, initial_observation || initial_startup_observation,
+                startup_enabled, startup_eligible);
+            if (startup_started) {
+                this->return_startup_service_ms_ = millis();
+                this->reset_z2_soft_start_("Return-Guided Startup has priority for this cycle");
+                this->reset_z2_target_delta_soft_start_("Return-Guided Startup has priority for this cycle");
+                this->clear_predictive_boost_(OptimizerZone::ZONE_2, false);
+                ESP_LOGI(OPTIMIZER_TAG, "[Z2 STARTUP] Return-guided startup activated after genuine compressor start; both legacy startup ramps suspended for this cycle. Buffer and compressor-stop guards remain in charge.");
+                this->publish_return_guided_startup_();
+            } else if (startup_enabled && x && !x_previous) {
+                ESP_LOGI(OPTIMIZER_TAG, "[Z2 STARTUP] Not activated: %s.",
+                         (initial_observation || initial_startup_observation) ? "compressor already running at ESP startup"
+                         : this->return_startup_ineligible_reason_(startup_status) != nullptr
+                           ? this->return_startup_ineligible_reason_(startup_status) : "no eligible start");
+            }
             if (x_previous && !x) {
                 this->reset_z2_soft_start_("compressor stopped");
                 this->reset_z2_target_delta_soft_start_("compressor stopped");
             }
-            if (millis() < 60000) 
+            if (millis() < 60000) {
+                if (startup_started) this->run_auto_adaptive_loop(true);
                 return;
+            }
 
             if (x_previous && !x)
             {
@@ -426,7 +456,8 @@ namespace esphome
                              ? "Compressor already running at ESP startup; target-delta ramp is not initialized mid-cycle."
                              : "Compressor START detected");
                     this->compressor_start_time_ = millis();
-                    if (this->state_.z2_soft_start_enabled != nullptr
+                    if (!this->z2_return_startup_.claimed_cycle()
+                        && this->state_.z2_soft_start_enabled != nullptr
                         && this->state_.z2_soft_start_enabled->state
                         && status.Operation == esphome::ecodan::Status::OperationMode::HEAT_ON
                         && status.has_2zones()
@@ -439,7 +470,7 @@ namespace esphome
                         this->z2_soft_start_last_step_ = -1;
                         ESP_LOGI(OPTIMIZER_TAG, "Z2 soft-start armed after compressor start; waiting for first valid AA flow calculation.");
                     }
-                    if (!initial_observation
+                    if (!this->z2_return_startup_.claimed_cycle() && !initial_observation
                         && this->aa_enabled()
                         && this->state_.z2_target_delta_soft_start_enabled != nullptr
                         && this->state_.z2_target_delta_soft_start_enabled->state
