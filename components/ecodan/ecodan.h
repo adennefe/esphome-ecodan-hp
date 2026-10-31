@@ -43,6 +43,13 @@ namespace ecodan
         void loop() override;
         void dump_config() override;    
     
+        // Packet observations are distinct from the synthetic entity OFF set
+        // by register_binarySensor(). Subscribers also receive unchanged packets.
+        void add_on_compressor_state_callback(std::function<void(bool)> callback) {
+            this->compressor_observation_callbacks_.add(std::move(callback));
+        }
+        bool has_received_compressor_state() const { return this->compressor_state_received_; }
+
         void register_sensor(sensor::Sensor *obj, const std::string& key) {
             if (obj != nullptr)
                 sensors[key] = obj;
@@ -55,7 +62,9 @@ namespace ecodan
 
         void register_binarySensor(binary_sensor::BinarySensor *obj, const std::string& key) {
             if (obj != nullptr) {
-                obj->publish_state(false);
+                // Compressor state is unknown until its first real packet.
+                // A synthetic OFF would mislead both UI users and observers.
+                if (key != "status_compressor") obj->publish_state(false);
                 binarySensors[key] = obj;
             }
         }
@@ -113,6 +122,8 @@ namespace ecodan
         bool is_connected();        
     
     private:
+        bool compressor_state_received_{false};
+        CallbackManager<void(bool)> compressor_observation_callbacks_;
         uart::UARTComponent *uart_ = nullptr;
         uart::UARTComponent *proxy_uart_ = nullptr;
         uint8_t initialCount = 0;

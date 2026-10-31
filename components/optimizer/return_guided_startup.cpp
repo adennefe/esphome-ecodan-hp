@@ -7,6 +7,8 @@ const char *Optimizer::return_startup_ineligible_reason_(const ecodan::Status &s
     if (!this->aa_enabled()) return "Auto-Adaptive disabled";
     if (this->odin_forwarder_takeover_active()) return "ODIN owns flow control";
     if (!status.CompressorOn) return "compressor stopped";
+    if (!this->compressor_observer_.known() || (millis() - this->compressor_observed_ms_) > 120000UL)
+        return "compressor observation unknown or stale (>120 s)";
     if (!status.has_2zones() || !status.has_independent_zone_temps()) return "independent Z2 control unavailable";
     if (status.HeatingCoolingMode != ecodan::Status::HpMode::HEAT_FLOW_TEMP
         && status.HeatingCoolingMode != ecodan::Status::HpMode::COOL_FLOW_TEMP)
@@ -39,10 +41,19 @@ void Optimizer::publish_return_guided_startup_() {
     if (sensor != nullptr && (!sensor->has_state() || sensor->state != active)) sensor->publish_state(active);
 }
 
+void Optimizer::log_return_startup_finished_(const char *reason) {
+    float maximum = this->state_.z2_startup_duration->state;
+    if (!std::isfinite(maximum)) maximum = 15.0f;
+    maximum = std::clamp(maximum, 5.0f, 60.0f);
+    ESP_LOGI(OPTIMIZER_TAG,
+        "[Z2 STARTUP] Finished. Reason=%s; elapsed=%.2f min; configured maximum=%.0f min; next owner=normal AA with existing guards.",
+        reason, this->z2_return_startup_.elapsed_ms(millis()) / 60000.0f, maximum);
+}
+
 void Optimizer::cancel_return_guided_startup_(const char *reason) {
     const bool owned = this->z2_return_startup_.owns_flow() || this->z2_return_startup_.waiting_for_aa();
-    if (owned)
-        ESP_LOGI(OPTIMIZER_TAG, "[Z2 STARTUP] Startup cancelled: %s; returning to normal Auto-Adaptive limits.", reason);
+    if (this->z2_return_startup_.owns_flow()) this->log_return_startup_finished_(reason);
+    else if (owned) ESP_LOGI(OPTIMIZER_TAG, "[Z2 STARTUP] Hold ended. Reason=%s.", reason);
     if (owned) this->clear_predictive_boost_(OptimizerZone::ZONE_2, false);
     this->z2_return_startup_.cancel();
     this->publish_return_guided_startup_();
@@ -56,6 +67,7 @@ void Optimizer::service_return_guided_startup(bool force) {
     }
     if (this->z2_return_startup_.owns_flow()
         && !this->state_.z2_return_guided_startup->state) {
+        this->log_return_startup_finished_("startup disabled");
         this->z2_return_startup_.wait_for_aa();
         this->publish_return_guided_startup_();
         ESP_LOGI(OPTIMIZER_TAG, "[Z2 STARTUP] Disabled; waiting for the next regular AA cycle.");

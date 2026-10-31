@@ -3,6 +3,8 @@
 #include <atomic>
 #include "optimizer_state.h"
 #include "return_guided_startup.h"
+#include "compressor_state.h"
+#include "guard_recovery.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include <lwip/netdb.h>
@@ -70,13 +72,26 @@ namespace esphome
 
       uint32_t compressor_start_time_ = 0;
       ReturnGuidedStartup z2_return_startup_;
+      GuardTelemetry guard_telemetry_;
+      GuardRecovery z2_guard_recovery_;
+      float z2_normal_aa_before_min_{NAN}, z2_guard_delta_{NAN};
+      uint32_t z2_normal_aa_ms_{0}, z2_guard_log_ms_{0};
+      bool z2_normal_aa_observed_{false};
+      float apply_z2_guard_recovery_(float legacy, bool aa_source=false, float normal_aa=NAN, float delta=NAN);
+      void register_guard_telemetry_();
       uint32_t return_startup_service_ms_{0};
-      bool startup_compressor_observed_{false};
+      CompressorStateTracker compressor_observer_;
+      uint32_t compressor_observed_ms_{0};
+      uint32_t confirmed_compressor_start_ms_{0};
+      bool confirmed_compressor_run_{false};
+      void register_compressor_observer_();
+      void observe_compressor_state_(float value);
       bool wp_return_observed_{false};
       uint32_t wp_return_received_ms_{0};
       const char *return_startup_ineligible_reason_(const ecodan::Status &status);
       void cancel_return_guided_startup_(const char *reason);
       void publish_return_guided_startup_();
+      void log_return_startup_finished_(const char *reason);
       bool z2_soft_start_pending_{false};
       bool z2_soft_start_active_{false};
       uint32_t z2_soft_start_start_ms_{0};
@@ -101,7 +116,6 @@ namespace esphome
       float last_z2_feed_temp_      = NAN;
       float last_operation_mode_    = NAN;
       float last_defrost_status_    = 0;
-      float last_compressor_status_ = 0;
 
       // Smart boost
       uint32_t stagnation_start_time_  = 0;

@@ -263,6 +263,8 @@ namespace esphome
                         this->state_.z2_startup_duration->state * 60.0f);
                 }
                 if (previous_phase != this->z2_return_startup_.phase()) {
+                    this->log_return_startup_finished_(this->z2_return_startup_.waiting_for_aa()
+                        ? this->z2_return_startup_.completion_reason() : "invalid AA target or limits");
                     ESP_LOGI(OPTIMIZER_TAG,
                         "[Z2 STARTUP] %s; no timed ramp. Next regular AA cycle resumes normal control.",
                         this->z2_return_startup_.waiting_for_aa() ? this->z2_return_startup_.completion_reason() : "Startup cancelled");
@@ -321,10 +323,13 @@ namespace esphome
                 (is_defrost_weather && defrost_enabled) ? NAN : actual_return_temp,
                 soft_start_floor);
 
+            if (zone_i==1)
+                calculated_flow=this->apply_z2_guard_recovery_(calculated_flow,true,normal_pre_limit_flow,effective_target_delta);
+
             if (return_startup_result.apply) {
                 // Startup completion is based on its requested target before guards.
                 ESP_LOGD(OPTIMIZER_TAG,
-                         "[Z2 STARTUP] Applied target after buffer/stop guards, rounding and max=%.2f C (startup %.2f C, normal AA %.2f C). Guards may override the startup ceiling.",
+                         "[Z2 STARTUP] Final requested target after buffer/stop guards, rounding and max=%.2f C (startup %.2f C, normal AA %.2f C). Guards may override the startup ceiling.",
                          calculated_flow, return_startup_result.target, normal_pre_limit_flow);
                 if (std::fabs(calculated_flow - return_startup_result.target) >= 0.1f)
                     ESP_LOGD(OPTIMIZER_TAG, "[Z2 STARTUP] Guard/temperature limit overrode startup target: %.2f -> %.2f C; see preceding limit message.",

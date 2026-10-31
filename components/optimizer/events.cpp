@@ -433,6 +433,11 @@ namespace esphome
                          : this->return_startup_ineligible_reason_(startup_status) != nullptr
                            ? this->return_startup_ineligible_reason_(startup_status) : "no eligible start");
             }
+            if (initial_observation || initial_startup_observation) {
+                this->compressor_start_time_ = 0;
+                ESP_LOGD(OPTIMIZER_CYCLE_TAG, "Initial compressor observation only; no artificial START/STOP event or legacy startup ramp.");
+                return;
+            }
             if (x_previous && !x) {
                 this->reset_z2_soft_start_("compressor stopped");
                 this->reset_z2_target_delta_soft_start_("compressor stopped");

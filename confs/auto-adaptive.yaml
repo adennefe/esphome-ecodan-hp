@@ -39,6 +39,10 @@ esphome:
             state.z2_startup_duration = id(z2_startup_duration);
             state.z2_startup_active = id(z2_startup_active);
             state.hp_return_temp = id(hp_return_temp);
+            state.z2_guard_recovery_enabled = id(z2_guard_recovery_enabled);
+            state.compressor_frequency = id(compressor_frequency);
+            state.flow_rate = id(flow_rate);
+            ${z2_cpp_prefix} state.z2_return_temp = id(z2_return_temp);
             ${asgard_prefix} state.bin_odin_forwarder_takeover = id(bin_odin_forwarder_takeover);
 
             state.status_short_cycle_lockout = id(status_short_cycle_lockout);
@@ -416,6 +420,11 @@ select:
     initial_option: "${solver_kwh_meter_option_internal}"
 
 switch:
+  - platform: template
+    id: z2_guard_recovery_enabled
+    name: ${z2_guard_recovery_enabled}
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
   - platform: template
     id: z2_return_guided_startup
     name: ${z2_return_guided_startup}

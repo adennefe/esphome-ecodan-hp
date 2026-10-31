@@ -308,6 +308,8 @@ namespace ecodan
         case GetType::ACTIVE_TIME:
             status.Runtime = res.get_float24_v2(3);
             status.CompressorOn = res[1] != 0;
+            this->compressor_state_received_ = true;
+            this->compressor_observation_callbacks_.call(status.CompressorOn);
             publish_state("runtime", status.Runtime);
             publish_state("status_compressor", status.CompressorOn);
             //ESP_LOGI(TAG, res.debug_dump_packet().c_str());

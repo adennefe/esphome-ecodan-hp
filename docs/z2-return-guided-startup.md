@@ -1,3 +1,6 @@
+> Packet-observed compressor initialization and optional conservative guard recovery
+> were added in 2026-10-31.01. See [the follow-up review](z2-startup-guard-2026-10-31.md).
+
 # Current behavior: Z2 minimum or maximum duration
 
 This source revision supersedes the timed startup and handover described in the

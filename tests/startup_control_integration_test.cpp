@@ -1,5 +1,10 @@
 // Production eligibility, service and predictive-guard methods with device fixtures.
 #include "components/optimizer/return_guided_startup.h"
+#include "components/optimizer/compressor_state.h"
+#include "components/optimizer/guard_recovery.h"
+#include <vector>
+#include <functional>
+#include <map>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -24,12 +29,29 @@ struct Binary { bool state{false}, observed{false}; bool has_state() const { ret
 struct Select { int index=0; std::optional<int> active_index() const { return index; } };
 struct FlowLimits { float min, max; };
 struct HeatingProfile { float base_min_delta_t, min_delta_cold_limit, max_delta_t, max_error_range, defrost_memory_ms; };
-struct Instance { ecodan::Status status{}; ecodan::Status &get_status() { return status; } };
+struct Instance {
+  ecodan::Status status{};
+  std::map<std::string,Binary*> binarySensors;
+#include "actual_binary_registration.inc"
+  struct Callbacks { std::vector<std::function<void(bool)>> items; void call(bool v){for(auto &f:items)f(v);} } compressor_observation_callbacks_;
+  bool compressor_state_received_=false;
+  ecodan::Status &get_status() { return status; }
+  void add_on_compressor_state_callback(std::function<void(bool)> f){compressor_observation_callbacks_.items.push_back(f);}
+  bool has_received_compressor_state() const{return compressor_state_received_;}
+  void publish_state(const char *,float){}
+  void publish_state(const char *,bool){}
+  void receive_compressor(bool on) {
+    struct Packet { bool on; float get_float24_v2(int)const{return 1;} int operator[](int)const{return on?1:0;} } res{on};
+    do {
+#include "actual_compressor_packet.inc"
+    }while(false);
+  }
+};
 class Optimizer {
  public:
   Instance instance;
   Number tolerance{0}, cool_min{18}, cool_start{19}; Select profile;
-  Switch enabled{true}, aa_switch{true}, defrost_switch{false}, legacy_switch{false}, override_z1{false}, override_z2{false}; Binary active, lockout;
+  Switch enabled{true}, aa_switch{true}, defrost_switch{false}, legacy_switch{false}, override_z1{false}, override_z2{false}, guard_enable{false}, predictive_enabled{true}; Binary active, lockout;
   Number hp_feed{21}, min_z1{24}, max_z1{35}, min_z2{24}, max_z2{35}, increment{0.5f}, interval{5};
   struct State {
     Instance *ecodan_instance;
@@ -38,12 +60,32 @@ class Optimizer {
     Binary *z2_startup_active, *status_short_cycle_lockout;
     Number *z1_guard_delta_t_tolerance, *z2_guard_delta_t_tolerance;
     Number *minimum_cooling_flow_temp_z1, *minimum_cooling_flow_temp_z2, *cooling_smart_start_temp;
+    Switch *z2_guard_recovery_enabled=nullptr, *predictive_short_cycle_control_enabled=nullptr, *z2_target_delta_soft_start_enabled=nullptr, *auto_adaptive_control_enabled=nullptr;
     Switch *sw_odin_override_z1=nullptr, *sw_odin_override_z2=nullptr, *defrost_risk_handling_enabled=nullptr, *z2_soft_start_enabled=nullptr;
     Number *hp_feed_temp=nullptr, *maximum_heating_flow_temp=nullptr, *minimum_heating_flow_temp=nullptr,
            *maximum_heating_flow_temp_z2=nullptr, *minimum_heating_flow_temp_z2=nullptr,
            *z2_soft_start_step=nullptr, *z2_soft_start_interval_minutes=nullptr, *z2_startup_return_offset=nullptr, *z2_startup_duration=nullptr;
   } state_{&instance,&profile,&enabled,&active,&lockout,&tolerance,&tolerance,&cool_min,&cool_min,&cool_start};
   ReturnGuidedStartup z2_return_startup_;
+  CompressorStateTracker compressor_observer_;
+  uint32_t compressor_observed_ms_=test_now, confirmed_compressor_start_ms_=0;
+  bool confirmed_compressor_run_=true;
+  GuardTelemetry guard_telemetry_;
+  GuardRecovery z2_guard_recovery_;
+  float z2_normal_aa_before_min_=NAN,z2_guard_delta_=NAN;
+  uint32_t z2_normal_aa_ms_=0,z2_guard_log_ms_=0;
+  bool z2_normal_aa_observed_=false;
+  uint32_t compressor_start_time_=0;
+  bool z2_target_delta_soft_start_pending_=false,z2_target_delta_soft_start_active_=false,z2_target_delta_soft_start_reached_raw_=false;
+  int32_t z2_target_delta_last_step_=-1;
+  float z2_target_delta_initial_raw_=NAN,z2_target_delta_max_raw_seen_=NAN;
+  void register_compressor_observer_();
+  void observe_compressor_state_(float);
+  void on_compressor_state_change(bool,bool,bool=false,bool=false);
+  int stops=0;
+  void on_compressor_stop(){++stops;}
+  void reset_z2_target_delta_soft_start_(const char *){z2_target_delta_soft_start_pending_=z2_target_delta_soft_start_active_=false;}
+  float apply_z2_guard_recovery_(float,bool=false,float=NAN,float=NAN);
   bool aa=true, odin=false, post_dhw=false, wp_return_observed_=true;
   uint32_t last_defrost_time_=0, wp_return_received_ms_=test_now, return_startup_service_ms_=0;
   float room=20, room_target=21, feed=21, live=24.0f, zone_min=24, zone_max=35;
@@ -70,6 +112,10 @@ class Optimizer {
   }
   const float MAX_FEED_STEP_CHANGE=1, MAX_FEED_STEP_ADJUSTMENT=1;
   Optimizer() {
+    state_.z2_guard_recovery_enabled=&guard_enable;state_.predictive_short_cycle_control_enabled=&predictive_enabled;
+    state_.z2_target_delta_soft_start_enabled=&legacy_switch;state_.auto_adaptive_control_enabled=&aa_switch;
+    compressor_observer_.observe(0);
+    compressor_observer_.observe(1);
     state_.sw_odin_override_z1=&override_z1;state_.sw_odin_override_z2=&override_z2;
     state_.hp_feed_temp=&hp_feed;state_.defrost_risk_handling_enabled=&defrost_switch;
     state_.z2_soft_start_enabled=&legacy_switch;state_.z2_soft_start_step=&increment;state_.z2_soft_start_interval_minutes=&interval;
@@ -109,6 +155,7 @@ class Optimizer {
   HeatingProfile get_heating_profile_(int);
   const char *return_startup_ineligible_reason_(const ecodan::Status &);
   void publish_return_guided_startup_();
+  void log_return_startup_finished_(const char *);
   void cancel_return_guided_startup_(const char *);
   void service_return_guided_startup(bool force=false);
   float enforce_step_limit(const ecodan::Status &,float,float,bool);
@@ -118,18 +165,21 @@ class Optimizer {
 #include "actual_flow_limits.inc"
 #include "actual_profile.inc"
 #include "actual_predictive.inc"
+#include "actual_guard_recovery.inc"
+#include "actual_compressor_event.inc"
 #include "actual_heating.inc"
 #ifdef TEST_REAL_AA
 #include "actual_aa_loop.inc"
 #endif
 } }
 #include "actual_startup_control.inc"
+#include "actual_compressor_observer.inc"
 using namespace esphome::optimizer;
 static int checks=0;
 static void check(bool ok,const char *msg) { ++checks; if(!ok){std::fprintf(stderr,"FAIL control integration: %s\n",msg);std::exit(1);} }
 static bool near(float a,float b){return std::fabs(a-b)<0.001f;}
 static void arm(Optimizer &o) { check(o.z2_return_startup_.compressor_event(test_now,true,false,false,true,true),"arm fixture"); }
-#ifndef TEST_REAL_AA
+#if !defined(TEST_REAL_AA) && !defined(TEST_COMPRESSOR) && !defined(TEST_GUARD_RECOVERY)
 int main() {
   // Unlike the old eligibility=false parameter tests, these execute the real
   // eligibility function AND real Ecodan status predicates for every case.

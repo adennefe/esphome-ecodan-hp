@@ -1,4 +1,5 @@
 substitutions:
+  z2_guard_recovery_enabled: 'Auto-Adaptive: Z2 Guard Recovery'
   z2_return_guided_startup: 'Auto-Adaptive: Z2 Return-Guided Startup'
   z2_startup_return_offset: 'Auto-Adaptive: Z2 Startup Return Offset'
   z2_startup_duration: 'Auto-Adaptive: Z2 Startup Duration'

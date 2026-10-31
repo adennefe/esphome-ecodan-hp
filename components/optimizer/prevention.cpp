@@ -95,6 +95,8 @@ namespace esphome
                 }
                 step_limited = this->clamp_flow_temp(step_limited, limits.min, limits.max);
             }
+            if (zone==OptimizerZone::ZONE_2 && !is_cooling)
+                step_limited=this->apply_z2_guard_recovery_(step_limited);
             this->set_flow_temp(step_limited, zone);
         }
 

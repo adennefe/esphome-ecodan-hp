@@ -69,6 +69,10 @@ namespace esphome
         esphome::number::Number *z2_startup_duration{nullptr};
         esphome::binary_sensor::BinarySensor *z2_startup_active{nullptr};
         esphome::sensor::Sensor *hp_return_temp{nullptr};
+        esphome::switch_::Switch *z2_guard_recovery_enabled{nullptr};
+        esphome::sensor::Sensor *compressor_frequency{nullptr};
+        esphome::sensor::Sensor *flow_rate{nullptr};
+        esphome::sensor::Sensor *z2_return_temp{nullptr};
         esphome::switch_::Switch *relay_switch_z1{nullptr};
         esphome::switch_::Switch *relay_switch_z2{nullptr};
         esphome::switch_::Switch *sw_odin_override_z1{nullptr};

@@ -10,6 +10,7 @@ namespace esphome
         using namespace esphome::ecodan;
 
         Optimizer::Optimizer(OptimizerState state) : state_(state) {
+            this->register_guard_telemetry_();
             if (this->state_.hp_return_temp != nullptr) {
                 this->state_.hp_return_temp->add_on_state_callback([this](float x) {
                     this->wp_return_observed_ = std::isfinite(x);
@@ -58,21 +59,7 @@ namespace esphome
                 });
             }
 
-            if (this->state_.status_compressor != nullptr) {
-                this->state_.status_compressor->add_on_state_callback([this, update_if_changed](float x) {
-                    if (!std::isfinite(x)) return;
-                    const bool initial_startup_observation = !this->startup_compressor_observed_;
-                    this->startup_compressor_observed_ = true;
-                    if (std::isnan(this->last_compressor_status_)) {
-                        this->last_compressor_status_ = x;
-                        this->on_compressor_state_change(static_cast<bool>(x), false, true);
-                        return;
-                    }
-                    update_if_changed(this->last_compressor_status_, x, [this, initial_startup_observation](float new_v, float old_v) {
-                        this->on_compressor_state_change(static_cast<bool>(new_v), static_cast<bool>(old_v), false, initial_startup_observation);
-                    });
-                });
-            }
+            this->register_compressor_observer_();
 
             if (this->state_.status_defrost != nullptr) {
                 this->state_.status_defrost->add_on_state_callback([this, update_if_changed](float x) {

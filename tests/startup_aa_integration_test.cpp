@@ -8,7 +8,7 @@ int main() {
     check(o.z1_writes==0&&o.processed[0]==0&&o.processed[1]==1,"extra cycle processes and writes Z2 only");
     check(o.stagnation_start_time_==0&&o.last_error_==0&&o.current_stagnation_boost_==1,"extra Z2 cycle preserves shared boost history");
     check(o.override_z1.changes==0&&o.override_z2.changes==0,"extra cycle leaves overrides alone");
-    test_now+=60000;o.wp_return_received_ms_=test_now;o.instance.status.HpReturnTemperature=23;
+    test_now+=60000;o.wp_return_received_ms_=test_now;o.compressor_observed_ms_=test_now;o.instance.status.HpReturnTemperature=23;
     o.run_auto_adaptive_loop(true);
     check(o.z2_return_startup_.waiting_for_aa()&&near(o.live,24),"minimum reached writes 24 and enters wait");
     int writes=o.writes,processed=o.processed[1];o.run_auto_adaptive_loop(true);
@@ -20,7 +20,7 @@ int main() {
   }
   {
     Optimizer o;arm(o);o.duration.state=5;o.run_auto_adaptive_loop(true);
-    test_now+=300000;o.wp_return_received_ms_=test_now;
+    test_now+=300000;o.wp_return_received_ms_=test_now;o.compressor_observed_ms_=test_now;
     o.run_auto_adaptive_loop(true);
     check(o.z2_return_startup_.waiting_for_aa()&&near(o.live,21.5f),"production timeout holds low value below minimum");
     o.run_auto_adaptive_loop();
