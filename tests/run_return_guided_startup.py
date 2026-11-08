@@ -65,7 +65,7 @@ with tempfile.TemporaryDirectory(prefix="return-startup-") as build:
     first = thermostat.index("bool ThermostatClimate::heating_required_()")
     last = thermostat.index("bool ThermostatClimate::supplemental_cooling_required_()", first)
     (Path(build) / "actual_thermostat_heating.inc").write_text(thermostat[first:last], encoding="utf-8")
-    for test in ("return_guided_startup_test", "startup_guard_integration_test", "startup_control_integration_test", "startup_aa_integration_test", "compressor_observer_test", "guard_recovery_test", "thermostat_restart_test", "flow_anchored_startup_test", "flow_ramp_integration_test"):
+    for test in ("return_guided_startup_test", "startup_guard_integration_test", "startup_control_integration_test", "startup_aa_integration_test", "compressor_observer_test", "guard_recovery_test", "thermostat_restart_test", "flow_anchored_startup_test", "flow_ramp_integration_test", "buffer_guided_startup_test", "buffer_startup_integration_test"):
         binary = Path(build) / (test + ".exe")
         subprocess.run(command + ["-std=c++17", "-I", str(root), "-I", build,
                        str(root / "tests" / (test + ".cpp")), "-o", str(binary)],

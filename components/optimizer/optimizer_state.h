@@ -66,6 +66,9 @@ namespace esphome
         esphome::switch_::Switch *z2_target_delta_soft_start_enabled{nullptr};
         esphome::switch_::Switch *z2_return_guided_startup{nullptr};
         esphome::switch_::Switch *z2_flow_anchored_startup{nullptr};
+        esphome::switch_::Switch *z2_buffer_guided_mode{nullptr};
+        esphome::number::Number *z2_buffer_ready_margin{nullptr};
+        esphome::number::Number *z2_buffer_ready_duration{nullptr};
         esphome::number::Number *z2_flow_ramp_initial_delta{nullptr};
         esphome::number::Number *z2_flow_ramp_step{nullptr};
         esphome::number::Number *z2_flow_ramp_interval{nullptr};

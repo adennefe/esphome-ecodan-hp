@@ -6,7 +6,6 @@ static void samples(Optimizer &o,float hz=60){
   s.FlowRate=23;s.CompressorFrequency=static_cast<uint8_t>(hz);
   float v[]={hz,23,s.HpFeedTemperature,s.HpReturnTemperature,s.Z2FeedTemperature,s.Z2ReturnTemperature};
   for(unsigned i=0;i<GuardTelemetry::COUNT;++i)o.guard_telemetry_.observe(static_cast<GuardTelemetry::Field>(i),test_now,v[i]);
-  o.z2_flow_ramp_.observe_frequency(test_now,hz);
 }
 static void prepare(Optimizer &o){
   o.flow_enabled.state=true;o.duration.state=45;o.room=o.room_target=19;o.zone_max=o.max_z2.state=31;
@@ -31,23 +30,27 @@ int main(){
     check(!o.z2_flow_ramp_.active()&&near(o.live,29),"manual OFF immediately returns to normal 23+6 AA target");
     check(!o.z2_soft_start_pending_&&!o.z2_target_delta_soft_start_pending_,"no fallback old ramp mid-cycle");
   }
-  for(float hz:{26.0f,16.0f}){
+  for(float hz:{16.0f,26.0f,36.0f,42.0f}){
     Optimizer o;prepare(o);fire(o);const uint32_t start=test_now;
     for(unsigned m=0;m<=10;++m){test_now=start+m*60000;samples(o,hz);o.run_auto_adaptive_loop(true);}
-    check(o.z2_flow_ramp_.holding()&&near(o.live,23),"production HOLD after five minutes at low frequency");
+    check(o.z2_flow_ramp_.phase()==FlowAnchoredStartup::Phase::BUFFER_WARMUP&&near(o.live,23.5f),"all frequencies use time ramp without HOLD");
     o.instance.status.Z2ReturnTemperature=22.8f;test_now+=30000;samples(o,hz);o.service_z2_flow_ramp();
-    check(near(o.live,23),"normal AA rise stays capped in HOLD");
+    check(near(o.live,23.5f),"normal AA rise stays capped by time ramp");
     test_now+=30000;samples(o,35);o.service_z2_flow_ramp();
-    check(!o.z2_flow_ramp_.holding()&&near(o.live,23.5f),"production frequency excursion releases HOLD");
+    check(o.z2_flow_ramp_.active()&&near(o.live,23.5f),"frequency excursion does not release startup");
     o.room=18.8f;test_now+=5000;samples(o,35);o.service_z2_flow_ramp();
-    check(!o.z2_flow_ramp_.active()&&o.live>=24,"room deficit bypasses cap and restores normal min immediately");
+    check(o.z2_flow_ramp_.active(),"room deficit 0.2 K does not release immediately");
+    test_now+=600000;samples(o,35);o.service_z2_flow_ramp();
+    check(!o.z2_flow_ramp_.active()&&o.live>=24,"room deficit 0.2 K for ten minutes restores normal min");
   }
   {
     Optimizer o;prepare(o);fire(o);o.feed=o.instance.status.Z2FeedTemperature=25;o.tolerance.state=5;
     test_now+=30000;samples(o);o.run_auto_adaptive_loop(true);
     check(near(o.live,24)&&o.z2_flow_ramp_.active(),"real stop guard overrides 22.5 startup request to feed-1");
     test_now+=30000;samples(o);o.run_auto_adaptive_loop(true);
-    check(!o.z2_flow_ramp_.active()&&near(o.live,26.5f),"second real stop guard returns to ordinary AA in same calculation");
+    check(o.z2_flow_ramp_.active()&&near(o.live,24),"second guard intervention stays protected without premature release");
+    test_now+=270000;samples(o);o.run_auto_adaptive_loop(true);
+    check(!o.z2_flow_ramp_.active()&&near(o.live,26.5f),"continuous five minute stop-guard override releases normal AA");
     Optimizer b;prepare(b);fire(b);b.feed=b.instance.status.Z2FeedTemperature=29;
     test_now+=30000;samples(b);b.run_auto_adaptive_loop(true);
     check(near(b.live,29),"Buffer guard remains stronger than ramp");
@@ -95,11 +98,13 @@ int main(){
     boundary.guard_telemetry_.values[GuardTelemetry::FLOW_RATE]=10;fire(boundary);
     check(boundary.z2_flow_ramp_.active(),"exact 10 l/min permits startup");
     Optimizer cold;prepare(cold);cold.room=18.8f;fire(cold);
-    check(!cold.z2_flow_ramp_.active()&&!cold.z2_return_startup_.owns_flow(),"room deficit 0.2 K rejects startup and old-ramp fallback");
+    check(cold.z2_flow_ramp_.active()&&!cold.z2_return_startup_.owns_flow(),"room deficit 0.2 K permits time-limited startup");
+    cold.room=18.5f;test_now+=5000;samples(cold);cold.service_z2_flow_ramp();
+    check(!cold.z2_flow_ramp_.active(),"room deficit 0.5 K releases immediately");
   }
   {
     Optimizer o;prepare(o);o.instance.status.FlowRate=9;fire(o);
     check(!o.z2_flow_ramp_.active()&&!o.z2_return_startup_.owns_flow(),"low flow cannot arm selected alternative or fall back to old startup");
   }
-  std::printf("PASS: %d flow ramp production event/AA/guard/HOLD integration checks.\n",checks);
+  std::printf("PASS: %d flow ramp production event/AA/guard/no-frequency-HOLD integration checks.\n",checks);
 }

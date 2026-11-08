@@ -6,8 +6,6 @@ void Optimizer::register_guard_telemetry_() {
         if (source==nullptr) return;
         source->add_on_state_callback([this,field](float value) {
             this->guard_telemetry_.observe(field,millis(),value);
-            if (field == GuardTelemetry::FREQUENCY)
-                this->z2_flow_ramp_.observe_frequency(millis(), value);
         });
     };
     bind(this->state_.compressor_frequency,GuardTelemetry::FREQUENCY);

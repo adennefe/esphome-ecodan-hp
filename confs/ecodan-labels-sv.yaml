@@ -1,5 +1,8 @@
 # Swedish (sv)
 substitutions:
+  z2_buffer_guided_mode: 'Auto-Adaptive: Z2 Buffer-Guided Mode'
+  z2_buffer_ready_margin: 'Auto-Adaptive: Z2 Buffer Ready Margin'
+  z2_buffer_ready_duration: 'Auto-Adaptive: Z2 Buffer Ready Duration'
   z2_flow_anchored_startup: 'Auto-Adaptive: Z2 Flow-Anchored Startup Ramp'
   z2_flow_ramp_initial_delta: 'Auto-Adaptive: Z2 Flow Ramp Initial Delta'
   z2_flow_ramp_step: 'Auto-Adaptive: Z2 Flow Ramp Step'

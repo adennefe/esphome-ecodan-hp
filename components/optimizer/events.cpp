@@ -181,7 +181,7 @@ namespace esphome
         }
 
         bool Optimizer::set_flow_temp(float flow, OptimizerZone zone) {
-            if (zone == OptimizerZone::ZONE_2 && this->z2_return_startup_.claimed_cycle() && !std::isfinite(flow)) {
+            if (zone == OptimizerZone::ZONE_2 && (this->z2_flow_ramp_.claimed_cycle() || this->z2_return_startup_.claimed_cycle()) && !std::isfinite(flow)) {
                 ESP_LOGW(OPTIMIZER_TAG, "Z%d refusing non-finite flow command.", static_cast<int>(zone));
                 return false;
             }

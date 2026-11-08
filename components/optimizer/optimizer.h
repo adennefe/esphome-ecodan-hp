@@ -78,6 +78,8 @@ namespace esphome
       const char *flow_ramp_ineligible_reason_(const ecodan::Status &status);
       bool start_z2_flow_ramp_(bool running, bool previous, bool initial);
       void cancel_z2_flow_ramp_(const char *reason);
+      FlowAnchoredStartup::Buffer flow_ramp_buffer_() const;
+      void log_z2_flow_ramp_transition_(FlowAnchoredStartup::Phase previous);
       void log_z2_flow_ramp_(float normal, float before, float after, const char *reason);
       GuardTelemetry guard_telemetry_;
       GuardRecovery z2_guard_recovery_;

@@ -36,6 +36,9 @@ esphome:
             state.z2_target_delta_soft_start_enabled = id(z2_target_delta_soft_start_enabled);
             state.z2_return_guided_startup = id(z2_return_guided_startup);
             state.z2_flow_anchored_startup = id(z2_flow_anchored_startup);
+            state.z2_buffer_guided_mode = id(z2_buffer_guided_mode);
+            state.z2_buffer_ready_margin = id(z2_buffer_ready_margin);
+            state.z2_buffer_ready_duration = id(z2_buffer_ready_duration);
             state.z2_flow_ramp_initial_delta = id(z2_flow_ramp_initial_delta);
             state.z2_flow_ramp_step = id(z2_flow_ramp_step);
             state.z2_flow_ramp_interval = id(z2_flow_ramp_interval);
@@ -122,12 +125,32 @@ optimizer:
 
 number:
   - platform: template
+    id: z2_buffer_ready_margin
+    name: ${z2_buffer_ready_margin}
+    unit_of_measurement: "K"
+    optimistic: true
+    restore_value: true
+    initial_value: 0.5
+    min_value: 0.0
+    max_value: 3.0
+    step: 0.1
+  - platform: template
+    id: z2_buffer_ready_duration
+    name: ${z2_buffer_ready_duration}
+    unit_of_measurement: "min"
+    optimistic: true
+    restore_value: true
+    initial_value: 5
+    min_value: 1
+    max_value: 30
+    step: 1
+  - platform: template
     id: z2_flow_ramp_initial_delta
     name: ${z2_flow_ramp_initial_delta}
     unit_of_measurement: "K"
     optimistic: true
     restore_value: true
-    initial_value: 2.0
+    initial_value: 1.0
     min_value: 0.0
     max_value: 5.0
     step: 0.1
@@ -147,7 +170,7 @@ number:
     unit_of_measurement: "min"
     optimistic: true
     restore_value: true
-    initial_value: 5
+    initial_value: 15
     min_value: 1
     max_value: 30
     step: 1
@@ -167,7 +190,7 @@ number:
     unit_of_measurement: "min"
     optimistic: true
     restore_value: true
-    initial_value: 45
+    initial_value: 60
     min_value: 5
     max_value: 60
     step: 5
@@ -209,7 +232,7 @@ number:
     optimistic: true
     restore_value: true
     initial_value: 24.0
-    min_value: 24.0
+    min_value: 20.0
     max_value: 40.0
     step: 0.5
   - platform: template
@@ -454,6 +477,11 @@ select:
     initial_option: "${solver_kwh_meter_option_internal}"
 
 switch:
+  - platform: template
+    id: z2_buffer_guided_mode
+    name: ${z2_buffer_guided_mode}
+    restore_mode: ALWAYS_OFF
+    optimistic: true
   - platform: template
     id: z2_flow_anchored_startup
     name: ${z2_flow_anchored_startup}

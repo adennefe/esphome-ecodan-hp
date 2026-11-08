@@ -66,7 +66,8 @@ class Optimizer {
     Number *hp_feed_temp=nullptr, *maximum_heating_flow_temp=nullptr, *minimum_heating_flow_temp=nullptr,
            *maximum_heating_flow_temp_z2=nullptr, *minimum_heating_flow_temp_z2=nullptr,
            *z2_soft_start_step=nullptr, *z2_soft_start_interval_minutes=nullptr, *z2_startup_return_offset=nullptr, *z2_startup_duration=nullptr;
-    Switch *z2_flow_anchored_startup=nullptr;
+    Switch *z2_flow_anchored_startup=nullptr, *z2_buffer_guided_mode=nullptr;
+    Number *z2_buffer_ready_margin=nullptr,*z2_buffer_ready_duration=nullptr;
     Number *z2_flow_ramp_initial_delta=nullptr,*z2_flow_ramp_step=nullptr,*z2_flow_ramp_interval=nullptr;
   } state_{&instance,&profile,&enabled,&active,&lockout,&tolerance,&tolerance,&cool_min,&cool_min,&cool_start};
   ReturnGuidedStartup z2_return_startup_;
@@ -95,10 +96,10 @@ class Optimizer {
   uint32_t last_defrost_time_=0, wp_return_received_ms_=test_now, return_startup_service_ms_=0;
   float room=20, room_target=21, feed=21, live=24.0f, zone_min=24, zone_max=35;
   float predictive_boost_base_z1_setpoint_=NAN, predictive_boost_base_z2_setpoint_=NAN;
-  int aa_calls=0, writes=0, z1_writes=0; bool extra=false;
+  int aa_calls=0, writes=0, z1_writes=0; bool extra=false, reject_z2_writes=false;
   int processed[2]={0,0};
   Number offset{1},duration{15};
-  Switch flow_enabled{false}; Number initial_delta{2},flow_step{0.5f},flow_interval{5};
+  Switch flow_enabled{false},buffer_enabled{false}; Number initial_delta{2},flow_step{0.5f},flow_interval{5},buffer_margin{.5f},buffer_duration{5};
   bool adaptive_loop_running_=false;
   uint32_t stagnation_start_time_=0;
   float last_error_=0, current_stagnation_boost_=1;
@@ -118,6 +119,7 @@ class Optimizer {
   }
   const float MAX_FEED_STEP_CHANGE=1, MAX_FEED_STEP_ADJUSTMENT=1;
   Optimizer() {
+    state_.z2_buffer_guided_mode=&buffer_enabled;state_.z2_buffer_ready_margin=&buffer_margin;state_.z2_buffer_ready_duration=&buffer_duration;
     state_.z2_flow_anchored_startup=&flow_enabled; state_.z2_flow_ramp_initial_delta=&initial_delta;
     state_.z2_flow_ramp_step=&flow_step; state_.z2_flow_ramp_interval=&flow_interval;
     state_.z2_guard_recovery_enabled=&guard_enable;state_.predictive_short_cycle_control_enabled=&predictive_enabled;
@@ -153,7 +155,7 @@ class Optimizer {
   FlowLimits get_cool_flow_limits(OptimizerZone) { return {18,25}; }
   float round_nearest(float v) { return std::round(v*10)/10; }
   float clamp_flow_temp(float v,float low,float high) { return std::clamp(v,low,high); }
-  bool set_flow_temp(float v,OptimizerZone z) { if(z==OptimizerZone::ZONE_1){++z1_writes;instance.status.Zone1FlowTemperatureSetPoint=v;return true;} if (std::fabs(v-live)<0.05f) return false; live=v; instance.status.Zone2FlowTemperatureSetPoint=v; ++writes; return true; }
+  bool set_flow_temp(float v,OptimizerZone z) { if(z==OptimizerZone::ZONE_1){++z1_writes;instance.status.Zone1FlowTemperatureSetPoint=v;return true;} if (reject_z2_writes || std::fabs(v-live)<0.05f) return false; live=v; instance.status.Zone2FlowTemperatureSetPoint=v; ++writes; return true; }
   void clear_predictive_boost_(OptimizerZone z,bool) { (z==OptimizerZone::ZONE_2 ? predictive_boost_base_z2_setpoint_:predictive_boost_base_z1_setpoint_)=NAN; }
 #ifdef TEST_REAL_AA
   void run_auto_adaptive_loop(bool value=false);
@@ -169,6 +171,8 @@ class Optimizer {
   const char *flow_ramp_ineligible_reason_(const ecodan::Status &);
   bool start_z2_flow_ramp_(bool,bool,bool);
   void cancel_z2_flow_ramp_(const char *);
+  FlowAnchoredStartup::Buffer flow_ramp_buffer_() const;
+  void log_z2_flow_ramp_transition_(FlowAnchoredStartup::Phase);
   void service_z2_flow_ramp(bool force=false);
   void log_z2_flow_ramp_(float,float,float,const char *);
   float enforce_step_limit(const ecodan::Status &,float,float,bool);

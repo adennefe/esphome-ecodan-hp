@@ -249,17 +249,16 @@ namespace esphome
                 const char *reason = this->flow_ramp_ineligible_reason_(status);
                 if (reason != nullptr) this->cancel_z2_flow_ramp_(reason);
                 else {
-                    const bool held = this->z2_flow_ramp_.holding();
+                    const auto previous_phase = this->z2_flow_ramp_.phase();
                     flow_ramp_result = this->z2_flow_ramp_.calculate(millis(), this->state_.z2_flow_anchored_startup->state,
                         true, normal_pre_limit_flow, this->get_room_current_temp(OptimizerZone::ZONE_2),
                         this->get_room_target_temp(OptimizerZone::ZONE_2), this->state_.z2_flow_ramp_step->state,
-                        this->state_.z2_flow_ramp_interval->state, this->state_.z2_startup_duration->state, zone_min, zone_max);
+                        this->state_.z2_flow_ramp_interval->state, this->state_.z2_startup_duration->state, zone_min, zone_max, this->flow_ramp_buffer_());
                     if (flow_ramp_result.apply) {
                         calculated_flow = flow_ramp_result.target;
                         soft_start_floor = flow_ramp_result.minimum;
                     }
-                    if (!this->z2_flow_ramp_.active() || held != this->z2_flow_ramp_.holding())
-                        ESP_LOGI(OPTIMIZER_TAG, "[Z2 FLOW RAMP] %s; elapsed=%.2f min.", this->z2_flow_ramp_.reason(), this->z2_flow_ramp_.elapsed_ms(millis()) / 60000.0f);
+                    this->log_z2_flow_ramp_transition_(previous_phase);
                 }
             }
             ReturnGuidedStartup::Result return_startup_result;
@@ -346,12 +345,13 @@ namespace esphome
                 if (calculated_flow > flow_ramp_result.target + 0.05f)
                     ESP_LOGI(OPTIMIZER_TAG, "[Z2 FLOW RAMP] Guard overrides ramp request: %.2f -> %.2f C (cap %.2f C); stop guard=%s.",
                         flow_ramp_result.target, calculated_flow, flow_ramp_result.cap, stop_guard_applied ? "YES" : "NO (Buffer/limit)");
-                if (this->z2_flow_ramp_.guard_result(millis(), stop_guard_applied)) {
+                const auto previous_phase = this->z2_flow_ramp_.phase();
+                if (this->z2_flow_ramp_.guard_result(millis(), stop_guard_applied, flow_ramp_result.target, calculated_flow)) {
                     this->clear_predictive_boost_(OptimizerZone::ZONE_2, false);
                     // Raising to normal AA/min cannot undercut either already-applied guard.
                     calculated_flow = this->clamp_flow_temp(std::max(calculated_flow, normal_pre_limit_flow), zone_min, zone_max);
-                    ESP_LOGI(OPTIMIZER_TAG, "[Z2 FLOW RAMP] Released immediately: %s.", this->z2_flow_ramp_.reason());
                 }
+                this->log_z2_flow_ramp_transition_(previous_phase);
             }
 
             if (zone_i==1)
@@ -697,9 +697,13 @@ namespace esphome
                     {
                         const float previous = status.Zone2FlowTemperatureSetPoint;
                         const bool queued = set_flow_temp(flows_heat[1], OptimizerZone::ZONE_2);
+                        if (queued || std::fabs(status.Zone2FlowTemperatureSetPoint-flows_heat[1])<0.05f)
+                            this->z2_flow_ramp_.record_request(millis(), flows_heat[1]);
                         if (this->z2_flow_ramp_.claimed_cycle())
                             ESP_LOGD(OPTIMIZER_TAG, "[Z2 FLOW RAMP] Writer request=%.2f C previous FTC read-back=%.2f C command=%s; confirmation pending on later FTC status.", flows_heat[1], previous, queued ? "queued" : "unchanged / not queued");
                     }
+                    else if (status.is_auto_adaptive_heating(esphome::ecodan::Zone::ZONE_2))
+                        this->z2_flow_ramp_.record_request(millis(), flows_heat[1]);
 
                 } else if (cooling_demand) {
                     if (!z2_startup_only && status.is_auto_adaptive_cooling(esphome::ecodan::Zone::ZONE_1) &&

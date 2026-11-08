@@ -1,5 +1,9 @@
 # Z2 Flow-Anchored Startup Ramp
 
+Historischer Stand 07.01. Der aktuelle Nachfolger mit optionalem THW10,
+entfernter Frequenz-HOLD-Logik und Z2-Minimum ab 20 °C ist in
+[z2-buffer-guided-startup.md](z2-buffer-guided-startup.md) dokumentiert.
+
 Firmware: `asgard-z2-en-2026-11-07.01-flow-anchored-ramp-1`.
 Basis: `cbd7b48`, Branch `feat/guard-delta-tolerance`.
 Die Versionskennung bezeichnet diesen Entwicklungsauftrag; der vollständige Build

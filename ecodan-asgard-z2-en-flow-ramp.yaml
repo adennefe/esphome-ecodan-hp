@@ -3,7 +3,7 @@
 substitutions:
   name: ecodan-heatpump
   friendlyName: Ecodan heatpump
-  FIRMWARE_VERSION: asgard-z2-en-2026-11-07.01-flow-anchored-ramp-1
+  FIRMWARE_VERSION: asgard-z2-en-2026-11-08.02-buffer-guided-startup
   manifest: manifest-asgard-z2-en
 
 esphome:
