@@ -1,5 +1,6 @@
 // Production eligibility, service and predictive-guard methods with device fixtures.
 #include "components/optimizer/return_guided_startup.h"
+#include "components/optimizer/flow_anchored_startup.h"
 #include "components/optimizer/compressor_state.h"
 #include "components/optimizer/guard_recovery.h"
 #include <vector>
@@ -65,8 +66,12 @@ class Optimizer {
     Number *hp_feed_temp=nullptr, *maximum_heating_flow_temp=nullptr, *minimum_heating_flow_temp=nullptr,
            *maximum_heating_flow_temp_z2=nullptr, *minimum_heating_flow_temp_z2=nullptr,
            *z2_soft_start_step=nullptr, *z2_soft_start_interval_minutes=nullptr, *z2_startup_return_offset=nullptr, *z2_startup_duration=nullptr;
+    Switch *z2_flow_anchored_startup=nullptr;
+    Number *z2_flow_ramp_initial_delta=nullptr,*z2_flow_ramp_step=nullptr,*z2_flow_ramp_interval=nullptr;
   } state_{&instance,&profile,&enabled,&active,&lockout,&tolerance,&tolerance,&cool_min,&cool_min,&cool_start};
   ReturnGuidedStartup z2_return_startup_;
+  FlowAnchoredStartup z2_flow_ramp_;
+  uint32_t flow_ramp_service_ms_=0;
   CompressorStateTracker compressor_observer_;
   uint32_t compressor_observed_ms_=test_now, confirmed_compressor_start_ms_=0;
   bool confirmed_compressor_run_=true;
@@ -93,6 +98,7 @@ class Optimizer {
   int aa_calls=0, writes=0, z1_writes=0; bool extra=false;
   int processed[2]={0,0};
   Number offset{1},duration{15};
+  Switch flow_enabled{false}; Number initial_delta{2},flow_step{0.5f},flow_interval{5};
   bool adaptive_loop_running_=false;
   uint32_t stagnation_start_time_=0;
   float last_error_=0, current_stagnation_boost_=1;
@@ -112,6 +118,8 @@ class Optimizer {
   }
   const float MAX_FEED_STEP_CHANGE=1, MAX_FEED_STEP_ADJUSTMENT=1;
   Optimizer() {
+    state_.z2_flow_anchored_startup=&flow_enabled; state_.z2_flow_ramp_initial_delta=&initial_delta;
+    state_.z2_flow_ramp_step=&flow_step; state_.z2_flow_ramp_interval=&flow_interval;
     state_.z2_guard_recovery_enabled=&guard_enable;state_.predictive_short_cycle_control_enabled=&predictive_enabled;
     state_.z2_target_delta_soft_start_enabled=&legacy_switch;state_.auto_adaptive_control_enabled=&aa_switch;
     compressor_observer_.observe(0);
@@ -158,8 +166,13 @@ class Optimizer {
   void log_return_startup_finished_(const char *);
   void cancel_return_guided_startup_(const char *);
   void service_return_guided_startup(bool force=false);
+  const char *flow_ramp_ineligible_reason_(const ecodan::Status &);
+  bool start_z2_flow_ramp_(bool,bool,bool);
+  void cancel_z2_flow_ramp_(const char *);
+  void service_z2_flow_ramp(bool force=false);
+  void log_z2_flow_ramp_(float,float,float,const char *);
   float enforce_step_limit(const ecodan::Status &,float,float,bool);
-  float apply_flow_limits(OptimizerZone,float,float,float,float=NAN);
+  float apply_flow_limits(OptimizerZone,float,float,float,float=NAN,bool * = nullptr);
   void predictive_short_cycle_check_for_zone_(const ecodan::Status &,OptimizerZone,bool);
 };
 #include "actual_flow_limits.inc"
@@ -174,6 +187,7 @@ class Optimizer {
 } }
 #include "actual_startup_control.inc"
 #include "actual_compressor_observer.inc"
+#include "actual_flow_ramp_control.inc"
 using namespace esphome::optimizer;
 static int checks=0;
 static void check(bool ok,const char *msg) { ++checks; if(!ok){std::fprintf(stderr,"FAIL control integration: %s\n",msg);std::exit(1);} }

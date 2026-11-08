@@ -6,6 +6,8 @@ void Optimizer::register_guard_telemetry_() {
         if (source==nullptr) return;
         source->add_on_state_callback([this,field](float value) {
             this->guard_telemetry_.observe(field,millis(),value);
+            if (field == GuardTelemetry::FREQUENCY)
+                this->z2_flow_ramp_.observe_frequency(millis(), value);
         });
     };
     bind(this->state_.compressor_frequency,GuardTelemetry::FREQUENCY);
@@ -37,7 +39,7 @@ float Optimizer::apply_z2_guard_recovery_(float legacy, bool aa_source, float no
     }
     auto &status=this->state_.ecodan_instance->get_status();
     const auto limits=this->get_flow_limits(OptimizerZone::ZONE_2);
-    const bool startup=this->z2_return_startup_.owns_flow() || this->z2_return_startup_.waiting_for_aa()
+    const bool startup=this->z2_flow_ramp_.active() || this->z2_return_startup_.owns_flow() || this->z2_return_startup_.waiting_for_aa()
         || this->z2_soft_start_pending_ || this->z2_soft_start_active_
         || this->z2_target_delta_soft_start_pending_ || this->z2_target_delta_soft_start_active_;
     const bool eligible=!startup && this->confirmed_compressor_run_

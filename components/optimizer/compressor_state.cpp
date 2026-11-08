@@ -24,6 +24,7 @@ void Optimizer::observe_compressor_state_(float value) {
         this->z2_guard_recovery_.reset();
         this->z2_normal_aa_observed_=false;
         this->cancel_return_guided_startup_("compressor state unknown");
+        this->cancel_z2_flow_ramp_("compressor state unknown");
         ESP_LOGW(OPTIMIZER_TAG, "[COMPRESSOR] State unknown; a new confirmed OFF->ON is required.");
         return;
     }

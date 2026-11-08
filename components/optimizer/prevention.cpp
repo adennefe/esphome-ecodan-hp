@@ -11,6 +11,11 @@ namespace esphome
 
         void Optimizer::predictive_short_cycle_check_for_zone_(const ecodan::Status &status, OptimizerZone zone, bool is_cooling) {
 
+            if (zone == OptimizerZone::ZONE_2 && !is_cooling && this->z2_flow_ramp_.active()) {
+                this->clear_predictive_boost_(zone, false);
+                this->service_z2_flow_ramp(); // Same AA writer applies both guards and temporary minimum.
+                return;
+            }
             if (zone == OptimizerZone::ZONE_2 && !is_cooling && this->z2_return_startup_.owns_flow()) {
                 // One writer: AA applies the same enforce_step_limit() stop guard,
                 // followed by the startup-specific minimum and the configured max.

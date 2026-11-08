@@ -3,6 +3,7 @@
 #include <atomic>
 #include "optimizer_state.h"
 #include "return_guided_startup.h"
+#include "flow_anchored_startup.h"
 #include "compressor_state.h"
 #include "guard_recovery.h"
 #include "freertos/FreeRTOS.h"
@@ -72,6 +73,12 @@ namespace esphome
 
       uint32_t compressor_start_time_ = 0;
       ReturnGuidedStartup z2_return_startup_;
+      FlowAnchoredStartup z2_flow_ramp_;
+      uint32_t flow_ramp_service_ms_{0};
+      const char *flow_ramp_ineligible_reason_(const ecodan::Status &status);
+      bool start_z2_flow_ramp_(bool running, bool previous, bool initial);
+      void cancel_z2_flow_ramp_(const char *reason);
+      void log_z2_flow_ramp_(float normal, float before, float after, const char *reason);
       GuardTelemetry guard_telemetry_;
       GuardRecovery z2_guard_recovery_;
       float z2_normal_aa_before_min_{NAN}, z2_guard_delta_{NAN};
@@ -193,6 +200,7 @@ namespace esphome
       void on_compressor_state_change(bool x, bool x_previous, bool initial_observation = false,
                                       bool initial_startup_observation = false);
       void service_return_guided_startup(bool force = false);
+      void service_z2_flow_ramp(bool force = false);
       void on_defrost_state_change(bool x, bool x_previous);
       void cancel_z2_soft_start();
       void cancel_z2_target_delta_soft_start();
@@ -218,7 +226,7 @@ namespace esphome
       FlowLimits get_flow_limits(OptimizerZone zone);
       FlowLimits get_cool_flow_limits(OptimizerZone zone);
 
-      float apply_flow_limits(OptimizerZone zone, float calculated, float target_delta_t, float guard_return_temp, float heating_min_override = NAN);
+      float apply_flow_limits(OptimizerZone zone, float calculated, float target_delta_t, float guard_return_temp, float heating_min_override = NAN, bool *stop_guard_applied = nullptr);
       void reset_z2_soft_start_(const char *reason);
       float limit_external_flow(OptimizerZone zone, float requested);
 

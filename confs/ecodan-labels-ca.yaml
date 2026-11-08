@@ -1,4 +1,8 @@
 substitutions:
+  z2_flow_anchored_startup: 'Auto-Adaptive: Z2 Flow-Anchored Startup Ramp'
+  z2_flow_ramp_initial_delta: 'Auto-Adaptive: Z2 Flow Ramp Initial Delta'
+  z2_flow_ramp_step: 'Auto-Adaptive: Z2 Flow Ramp Step'
+  z2_flow_ramp_interval: 'Auto-Adaptive: Z2 Flow Ramp Interval'
   z2_guard_recovery_enabled: 'Auto-Adaptive: Z2 Guard Recovery'
   z2_return_guided_startup: 'Auto-Adaptive: Z2 Return-Guided Startup'
   z2_startup_return_offset: 'Auto-Adaptive: Z2 Startup Return Offset'

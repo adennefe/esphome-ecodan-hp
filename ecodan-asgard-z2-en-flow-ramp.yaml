@@ -1,0 +1,59 @@
+# Local build of the Asgard Z2 ESP32-S3 configuration used for the previous test firmware.
+# All packages and components are local. No upstream component cache is used.
+substitutions:
+  name: ecodan-heatpump
+  friendlyName: Ecodan heatpump
+  FIRMWARE_VERSION: asgard-z2-en-2026-11-07.01-flow-anchored-ramp-1
+  manifest: manifest-asgard-z2-en
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendlyName}
+  project:
+    version: ${FIRMWARE_VERSION}
+
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [ecodan, optimizer, asgard_dashboard, odin]
+
+packages:
+  base: !include confs/base.yaml
+  energy: !include confs/energy.yaml
+  cpu: !include confs/cpu-monitoring.yaml
+  requests: !include confs/request-codes.yaml
+  adaptive: !include confs/auto-adaptive.yaml
+  board: !include confs/asgard.yaml
+  zone1: !include confs/zone1.yaml
+  server_control_z1: !include confs/server-control-z1.yaml
+  zone2: !include confs/zone2.yaml
+  server_control_z2: !include confs/server-control-z2.yaml
+  labels: !include confs/ecodan-labels-en.yaml
+  debug: !include confs/debug.yaml
+  wifi: !include confs/wifi-ota.yaml
+  led: !include confs/led.yaml
+  ota: !include confs/ota.yaml
+
+# The generic package's upstream release manifest must not replace this fork build.
+# ESPHome OTA, web OTA and HTTP-request OTA upload methods remain available.
+update: !remove
+
+api:
+  reboot_timeout: 0s
+
+logger:
+  level: DEBUG
+  baud_rate: 115200
+  logs:
+    ecodan.component: WARN
+    auto_adaptive: DEBUG
+    short_cycle: DEBUG
+
+web_server:
+  port: 80
+  local: true
+
+ecodan:
+  id: ecodan_instance
+  uart_id: uart_ecodan

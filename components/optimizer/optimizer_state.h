@@ -65,6 +65,10 @@ namespace esphome
         esphome::switch_::Switch *z2_soft_start_enabled{nullptr};
         esphome::switch_::Switch *z2_target_delta_soft_start_enabled{nullptr};
         esphome::switch_::Switch *z2_return_guided_startup{nullptr};
+        esphome::switch_::Switch *z2_flow_anchored_startup{nullptr};
+        esphome::number::Number *z2_flow_ramp_initial_delta{nullptr};
+        esphome::number::Number *z2_flow_ramp_step{nullptr};
+        esphome::number::Number *z2_flow_ramp_interval{nullptr};
         esphome::number::Number *z2_startup_return_offset{nullptr};
         esphome::number::Number *z2_startup_duration{nullptr};
         esphome::binary_sensor::BinarySensor *z2_startup_active{nullptr};
